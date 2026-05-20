@@ -362,6 +362,17 @@ async function renderHours() {
   computeRange(state.range.kind);
   await loadShiftsForRange();
 
+  // Planned hours + per-day validations for the range
+  const [planRes, valRes] = await Promise.all([
+    sb.from('planning').select('*')
+      .gte('business_date', state.range.start).lte('business_date', state.range.end),
+    sb.from('validations').select('id, shift_ids')
+      .gte('range_start', state.range.start).lte('range_start', state.range.end),
+  ]);
+  const rangePlanning = planRes.data || [];
+  const validatedShiftIds = new Set();
+  (valRes.data || []).forEach(v => (v.shift_ids || []).forEach(id => validatedShiftIds.add(id)));
+
   // Apply staff filter
   let shifts = state.shifts;
   if (state.staffFilter !== 'all') {
@@ -394,6 +405,12 @@ async function renderHours() {
       card.className = 'summary-card';
       const days = new Set(g.shifts.map(s => s.business_date)).size;
       const avg = days > 0 ? g.totalNet / days : 0;
+
+      // Planned minutes from the planning grid for this staff in the range
+      const plannedMin = rangePlanning
+        .filter(p => p.staff_id === g.staff.id && !isOffSlot(p))
+        .reduce((sum, p) => sum + creneauMinutes(p), 0);
+
       // Compute estimated hours for the range based on contract
       const days_in_range = daysBetween(state.range.start, state.range.end) + 1;
       const weeks_in_range = days_in_range / 7;
@@ -412,6 +429,7 @@ async function renderHours() {
           ${escapeHTML(g.staff.name)}
         </div>
         <div class="summary-total">${fmtDuration(g.totalNet)}</div>
+        <div class="summary-planned">planifié · ${plannedMin > 0 ? fmtDuration(plannedMin) : '—'}</div>
         <div class="summary-detail">
           ${g.shifts.length} services · ${days} jours · ${fmtDuration(avg)}/jour moyen
         </div>
@@ -440,16 +458,25 @@ async function renderHours() {
     const shiftsWrap = wrap.querySelector('.detail-shifts');
     g.shifts.forEach(s => {
       const row = document.createElement('div');
-      row.className = 'detail-shift';
+      const isValidated = validatedShiftIds.has(s.id);
+      row.className = 'detail-shift' + (isValidated ? ' validated' : '');
       row.innerHTML = `
         <span class="shift-date">${fmtDateShort(new Date(s.business_date))}</span>
         <span class="mono">${fmtTime(s.started_at)}</span>
         <span class="mono">${s.ended_at ? fmtTime(s.ended_at) : '— en cours'}</span>
         <span class="mono">${s._pause > 0 ? 'p ' + fmtDuration(s._pause) : ''}</span>
         <span class="shift-net">${fmtDuration(s._net)}</span>
-        <span style="text-align:right;color:var(--paper-3);font-size:11px;">${s.source === 'manager_edit' ? '✎ édité' : s.source === 'manager_create' ? '＋ créé' : ''}</span>
+        <span class="shift-src">${s.source === 'manager_edit' ? '✎ édité' : s.source === 'manager_create' ? '＋ créé' : ''}</span>
+        <button class="shift-validate${isValidated ? ' on' : ''}" type="button">${isValidated ? '✓ validé' : 'valider'}</button>
       `;
-      row.addEventListener('click', () => openShiftModal(s));
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.shift-validate')) return;
+        openShiftModal(s);
+      });
+      row.querySelector('.shift-validate').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleShiftValidation(s);
+      });
       shiftsWrap.appendChild(row);
     });
     wrap.querySelector('.detail-staff-head').addEventListener('click', () => {
@@ -457,6 +484,41 @@ async function renderHours() {
     });
     detail.appendChild(wrap);
   });
+}
+
+// Duration of a planning créneau in minutes (handles overnight slots).
+function creneauMinutes(p) {
+  const toMin = t => { const [h, m] = (t || '0:0').split(':'); return (+h) * 60 + (+m); };
+  let s = toMin(p.starts_at), e = toMin(p.ends_at);
+  if (p.ends_next_day || e < s) e += 1440;
+  return Math.max(0, e - s);
+}
+
+async function toggleShiftValidation(shift) {
+  const { data: existing, error: qErr } = await sb
+    .from('validations').select('id').contains('shift_ids', [shift.id]);
+  if (qErr) { console.error(qErr); toast('Impossible', 'error'); return; }
+
+  if (existing && existing.length) {
+    const { error } = await sb.from('validations').delete().in('id', existing.map(v => v.id));
+    if (error) { console.error(error); toast('Impossible', 'error'); return; }
+    toast('Validation retirée');
+  } else {
+    const net = computeShiftMinutes(shift).net || 0;
+    const { error } = await sb.from('validations').insert({
+      staff_id: shift.staff_id,
+      range_start: shift.business_date,
+      range_end: shift.business_date,
+      scope: 'custom',
+      total_minutes: net,
+      shift_ids: [shift.id],
+      validated_by: state.managerName || 'manager',
+      note: null,
+    });
+    if (error) { console.error(error); toast('Validation impossible', 'error'); return; }
+    toast('Jour validé ✓');
+  }
+  renderHours();
 }
 
 function daysBetween(startISO, endISO) {
@@ -940,54 +1002,6 @@ async function copyPrevWeek() {
 }
 
 // ── VALIDATION ───────────────────────────────────────────────────────────────
-function openValidate() {
-  computeRange(state.range.kind);
-  const filtered = state.staffFilter !== 'all' ? state.shifts.filter(s => s.staff_id === state.staffFilter) : state.shifts;
-  const totalMin = filtered.reduce((sum, s) => {
-    const m = computeShiftMinutes(s);
-    return sum + m.net;
-  }, 0);
-  const staffName = state.staffFilter !== 'all' ? state.staff.find(s => s.id === state.staffFilter)?.name : 'tous les staff';
-  $('#validate-prompt').textContent =
-    `Valider du ${fmtDateShort(new Date(state.range.start))} au ${fmtDateShort(new Date(state.range.end))} · ${staffName} · ${filtered.length} services · ${fmtDuration(totalMin)}`;
-  $('#validate-by').value = state.managerName;
-  $('#validate-note').value = '';
-  $('#validate-modal').classList.remove('hidden');
-}
-
-async function confirmValidate() {
-  const by = $('#validate-by').value.trim();
-  const note = $('#validate-note').value.trim();
-  if (!by) { toast('Ton nom est requis', 'error'); return; }
-
-  state.managerName = by;
-  localStorage.setItem('tornet.managerName', by);
-
-  const filtered = state.staffFilter !== 'all' ? state.shifts.filter(s => s.staff_id === state.staffFilter) : state.shifts;
-  const totalMin = filtered.reduce((sum, s) => sum + computeShiftMinutes(s).net, 0);
-
-  // Determine scope
-  let scope = 'custom';
-  if (state.range.kind === 'this-week' || state.range.kind === 'last-week') scope = 'week';
-  else if (state.range.kind === 'this-month' || state.range.kind === 'last-month') scope = 'month';
-
-  const payload = {
-    staff_id: state.staffFilter !== 'all' ? state.staffFilter : null,
-    range_start: state.range.start,
-    range_end: state.range.end,
-    scope,
-    total_minutes: totalMin,
-    shift_ids: filtered.map(s => s.id),
-    validated_by: by,
-    note: note || null,
-  };
-
-  const { error } = await sb.from('validations').insert(payload);
-  if (error) { console.error(error); toast('Validation impossible', 'error'); return; }
-  toast('Période validée ✓');
-  closeModal('#validate-modal');
-}
-
 // ── PRINT & EXPORT ───────────────────────────────────────────────────────────
 function printToday() {
   window.print();
@@ -1114,7 +1128,6 @@ function wire() {
 
   $('#hours-print').addEventListener('click', printHours);
   $('#hours-csv').addEventListener('click', exportCSV);
-  $('#hours-validate').addEventListener('click', openValidate);
 
   // Planning
   $('#plan-prev').addEventListener('click', () => {
@@ -1154,9 +1167,6 @@ function wire() {
   // Shift modal
   $('#shift-save').addEventListener('click', saveShift);
   $('#shift-delete').addEventListener('click', deleteShift);
-
-  // Validate
-  $('#validate-confirm').addEventListener('click', confirmValidate);
 
   // Modal closers
   $$('[data-close]').forEach(el => {
