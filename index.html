@@ -123,7 +123,6 @@
         <div class="control-group control-actions">
           <button class="btn-mini" id="hours-print">🖨 Imprimer feuilles</button>
           <button class="btn-mini" id="hours-csv">⬇ Export CSV</button>
-          <button class="btn-primary" id="hours-validate">✓ Valider la période</button>
         </div>
       </div>
 
@@ -314,33 +313,6 @@
         <button class="btn-ghost" data-close="plan">Annuler</button>
         <button class="btn-danger hidden" id="plan-delete">Supprimer</button>
         <button class="btn-primary" id="plan-save">Enregistrer</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Validation modal -->
-  <div class="modal hidden" id="validate-modal">
-    <div class="modal-backdrop" data-close="validate"></div>
-    <div class="modal-card">
-      <header class="modal-head">
-        <button class="modal-close" data-close="validate">✕</button>
-        <h2 class="modal-title">Valider la période</h2>
-      </header>
-      <div class="modal-body">
-        <p class="validate-prompt" id="validate-prompt">—</p>
-        <label class="field-col">
-          <span class="field-label">Validé par</span>
-          <input type="text" id="validate-by" placeholder="ton nom">
-        </label>
-        <label class="field-col">
-          <span class="field-label">Note (optionnel)</span>
-          <textarea id="validate-note" rows="2" placeholder="ex. transmis au comptable"></textarea>
-        </label>
-        <p class="validate-warn">Une fois validée, la période sera marquée comme transmise. Tu peux toujours la modifier mais ce sera tracé.</p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-ghost" data-close="validate">Annuler</button>
-        <button class="btn-primary" id="validate-confirm">Valider</button>
       </div>
     </div>
   </div>
