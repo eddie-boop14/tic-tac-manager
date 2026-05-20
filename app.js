@@ -5,9 +5,9 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── CONFIG ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL  = 'YOUR_SUPABASE_URL';      // ← TO FILL
-const SUPABASE_KEY  = 'YOUR_SUPABASE_ANON_KEY'; // ← TO FILL
-const MANAGER_CODE  = 'tornet2026';             // ← CHANGE THIS BEFORE DEPLOY
+const SUPABASE_URL  = 'https://vyptkpvgdfbyvsdqnywx.supabase.co';      // ← TO FILL
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5cHRrcHZnZGZieXZzZHFueXd4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMDAzODcsImV4cCI6MjA5NDg3NjM4N30.p0DEH-QOC4U-CL0eOU8UaXkWzTUfFI0CzMbdaW9AbX8'; // ← TO FILL
+const MANAGER_CODE  = 'tic-tac-tornet';             // ← CHANGE THIS BEFORE DEPLOY
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
