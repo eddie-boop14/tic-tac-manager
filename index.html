@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a2620">
+  <title>Tornet · Admin</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛰️</text></svg>">
+</head>
+<body>
+
+  <!-- ══ AUTH GATE ══ -->
+  <section class="auth-gate" id="auth-gate">
+    <div class="auth-card">
+      <div class="auth-mark">⛰</div>
+      <h1 class="auth-title">Tornet · Admin</h1>
+      <p class="auth-sub">Espace manager</p>
+      <input type="password" id="auth-input" placeholder="code manager" autocomplete="off">
+      <button class="btn-primary" id="auth-btn">Entrer</button>
+      <p class="auth-hint" id="auth-hint"></p>
+    </div>
+  </section>
+
+  <!-- ══ MAIN ══ -->
+  <div class="app hidden" id="app">
+
+    <!-- ── TOPBAR ── -->
+    <header class="topbar">
+      <div class="brand-block">
+        <span class="brand-mark">⛰</span>
+        <div>
+          <div class="brand-name">Chalet du Tornet</div>
+          <div class="brand-sub">pointage · admin</div>
+        </div>
+      </div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="today">Aujourd'hui</button>
+        <button class="tab" data-tab="hours">Heures</button>
+        <button class="tab" data-tab="planning">Planning</button>
+        <button class="tab" data-tab="staff">Staff</button>
+      </nav>
+      <div class="topbar-end">
+        <span class="live-clock" id="live-clock">—</span>
+        <button class="btn-icon" id="btn-logout" title="Déconnexion">⏻</button>
+      </div>
+    </header>
+
+    <!-- ══ TODAY PANEL ══ -->
+    <section class="panel" id="panel-today">
+
+      <div class="section-head">
+        <h2>En service maintenant</h2>
+        <span class="rule"></span>
+        <span class="badge-date" id="today-date">—</span>
+      </div>
+
+      <div class="live-grid" id="live-grid">
+        <div class="empty">chargement…</div>
+      </div>
+
+      <div class="section-head">
+        <h2>Aujourd'hui</h2>
+        <span class="rule"></span>
+        <button class="btn-mini" id="print-today">🖨 Imprimer</button>
+      </div>
+
+      <div class="today-table-wrap">
+        <table class="today-table" id="today-table">
+          <thead>
+            <tr>
+              <th>Staff</th>
+              <th>Début</th>
+              <th>Fin</th>
+              <th>Pause</th>
+              <th>Net</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="today-rows">
+            <tr><td colspan="6" class="empty">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+
+    <!-- ══ HOURS PANEL ══ -->
+    <section class="panel hidden" id="panel-hours">
+
+      <div class="hours-controls">
+        <div class="control-group">
+          <label class="control-label">période</label>
+          <div class="range-chips">
+            <button class="chip" data-range="this-week">Cette semaine</button>
+            <button class="chip" data-range="last-week">Semaine dernière</button>
+            <button class="chip active" data-range="this-month">Ce mois</button>
+            <button class="chip" data-range="last-month">Mois dernier</button>
+            <button class="chip" data-range="custom">Période…</button>
+          </div>
+          <div class="custom-range hidden" id="custom-range">
+            <input type="date" id="range-start">
+            <span>→</span>
+            <input type="date" id="range-end">
+            <button class="btn-mini" id="apply-range">Charger</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label class="control-label">staff</label>
+          <div class="staff-filter" id="staff-filter">
+            <button class="chip active" data-staff="all">Tous</button>
+            <!-- staff chips injected -->
+          </div>
+        </div>
+
+        <div class="control-group control-actions">
+          <button class="btn-mini" id="hours-print">🖨 Imprimer feuilles</button>
+          <button class="btn-mini" id="hours-csv">⬇ Export CSV</button>
+          <button class="btn-primary" id="hours-validate">✓ Valider la période</button>
+        </div>
+      </div>
+
+      <div class="hours-summary" id="hours-summary">
+        <!-- Per-staff totals injected -->
+      </div>
+
+      <div class="hours-detail" id="hours-detail">
+        <!-- Day-by-day rows injected -->
+      </div>
+
+    </section>
+
+    <!-- ══ PLANNING PANEL ══ -->
+    <section class="panel hidden" id="panel-planning">
+
+      <div class="planning-controls">
+        <button class="btn-icon" id="plan-prev">‹</button>
+        <div class="planning-week-label" id="planning-week-label">—</div>
+        <button class="btn-icon" id="plan-next">›</button>
+        <button class="btn-mini" id="plan-today">Cette semaine</button>
+        <span class="rule"></span>
+        <button class="btn-mini" id="plan-copy-prev">↻ Copier semaine précédente</button>
+        <button class="btn-mini" id="plan-print">🖨 Imprimer</button>
+      </div>
+
+      <div class="planning-grid-wrap">
+        <table class="planning-grid" id="planning-grid">
+          <!-- Built by JS -->
+        </table>
+      </div>
+
+      <p class="planning-hint">Tape une cellule pour ajouter/modifier un créneau. Drag pour redimensionner. Le planning n'est qu'indicatif — le pointage réel se fait à la pointeuse.</p>
+
+    </section>
+
+    <!-- ══ STAFF PANEL ══ -->
+    <section class="panel hidden" id="panel-staff">
+
+      <div class="section-head">
+        <h2>Équipe</h2>
+        <span class="rule"></span>
+        <button class="btn-mini" id="add-staff">+ Ajouter</button>
+      </div>
+
+      <div class="staff-list" id="staff-list">
+        <!-- Staff cards injected -->
+      </div>
+
+    </section>
+
+  </div>
+
+  <!-- ══ MODALS ══ -->
+
+  <!-- Shift edit modal -->
+  <div class="modal hidden" id="shift-modal">
+    <div class="modal-backdrop" data-close="shift"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <button class="modal-close" data-close="shift">✕</button>
+        <h2 class="modal-title">Service</h2>
+      </header>
+      <div class="modal-body">
+        <div class="field-row-2">
+          <label class="field-col">
+            <span class="field-label">Staff</span>
+            <select id="shift-staff"></select>
+          </label>
+          <label class="field-col">
+            <span class="field-label">Date</span>
+            <input type="date" id="shift-date">
+          </label>
+        </div>
+        <div class="field-row-2">
+          <label class="field-col">
+            <span class="field-label">Début</span>
+            <input type="time" id="shift-start">
+          </label>
+          <label class="field-col">
+            <span class="field-label">Fin</span>
+            <input type="time" id="shift-end">
+          </label>
+        </div>
+        <label class="field-col">
+          <span class="field-label">Pause (minutes)</span>
+          <input type="number" id="shift-pause" min="0" step="5" value="0">
+        </label>
+        <label class="field-col">
+          <span class="field-label">Note (raison de la modification)</span>
+          <textarea id="shift-note" rows="2" placeholder="ex. oubli de pointer la fin"></textarea>
+        </label>
+        <div class="shift-totals" id="shift-totals">—</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="shift">Annuler</button>
+        <button class="btn-danger hidden" id="shift-delete">Supprimer</button>
+        <button class="btn-primary" id="shift-save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Staff edit modal -->
+  <div class="modal hidden" id="staff-modal">
+    <div class="modal-backdrop" data-close="staff"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <button class="modal-close" data-close="staff">✕</button>
+        <h2 class="modal-title">Membre de l'équipe</h2>
+      </header>
+      <div class="modal-body">
+        <label class="field-col">
+          <span class="field-label">Nom</span>
+          <input type="text" id="staff-name" placeholder="ex. Marie">
+        </label>
+        <div class="field-row-2">
+          <label class="field-col">
+            <span class="field-label">Code PIN (4 chiffres)</span>
+            <input type="text" id="staff-pin" pattern="[0-9]{4}" maxlength="4" inputmode="numeric">
+          </label>
+          <label class="field-col">
+            <span class="field-label">Heures contractuelles / semaine</span>
+            <input type="number" id="staff-contract" min="0" step="0.5" value="35">
+          </label>
+        </div>
+        <div class="field-row-2">
+          <label class="field-col">
+            <span class="field-label">Couleur planning</span>
+            <input type="color" id="staff-color" value="#5a8a6b">
+          </label>
+          <label class="field-col">
+            <span class="field-label">Taux horaire brut (€) — optionnel</span>
+            <input type="number" id="staff-rate" min="0" step="0.01" placeholder="12.50">
+          </label>
+        </div>
+        <label class="field-row">
+          <input type="checkbox" id="staff-active" checked>
+          <span>Actif (peut pointer)</span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="staff">Annuler</button>
+        <button class="btn-danger hidden" id="staff-delete">Désactiver</button>
+        <button class="btn-primary" id="staff-save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Planning slot edit modal -->
+  <div class="modal hidden" id="plan-modal">
+    <div class="modal-backdrop" data-close="plan"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <button class="modal-close" data-close="plan">✕</button>
+        <h2 class="modal-title">Créneau</h2>
+      </header>
+      <div class="modal-body">
+        <div class="plan-context" id="plan-context">—</div>
+        <div class="field-row-2">
+          <label class="field-col">
+            <span class="field-label">Début</span>
+            <input type="time" id="plan-start">
+          </label>
+          <label class="field-col">
+            <span class="field-label">Fin</span>
+            <input type="time" id="plan-end">
+          </label>
+        </div>
+        <label class="field-col">
+          <span class="field-label">Poste (optionnel)</span>
+          <input type="text" id="plan-role" placeholder="ex. cuisine, salle, bar">
+        </label>
+        <label class="field-col">
+          <span class="field-label">Note (optionnel)</span>
+          <input type="text" id="plan-note" placeholder="ex. fermeture">
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="plan">Annuler</button>
+        <button class="btn-danger hidden" id="plan-delete">Supprimer</button>
+        <button class="btn-primary" id="plan-save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Validation modal -->
+  <div class="modal hidden" id="validate-modal">
+    <div class="modal-backdrop" data-close="validate"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <button class="modal-close" data-close="validate">✕</button>
+        <h2 class="modal-title">Valider la période</h2>
+      </header>
+      <div class="modal-body">
+        <p class="validate-prompt" id="validate-prompt">—</p>
+        <label class="field-col">
+          <span class="field-label">Validé par</span>
+          <input type="text" id="validate-by" placeholder="ton nom">
+        </label>
+        <label class="field-col">
+          <span class="field-label">Note (optionnel)</span>
+          <textarea id="validate-note" rows="2" placeholder="ex. transmis au comptable"></textarea>
+        </label>
+        <p class="validate-warn">Une fois validée, la période sera marquée comme transmise. Tu peux toujours la modifier mais ce sera tracé.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="validate">Annuler</button>
+        <button class="btn-primary" id="validate-confirm">Valider</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast hidden" id="toast"></div>
+
+  <!-- Footer stamp -->
+  <footer class="footer-stamp-fixed">© 2026 bleu-canard éditions · Edmaster &amp; Claudius</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
