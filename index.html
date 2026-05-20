@@ -163,6 +163,15 @@
         <button class="btn-mini" id="add-staff">+ Ajouter</button>
       </div>
 
+      <div class="staff-controls">
+        <input type="search" id="staff-search" placeholder="Rechercher un nom…" autocomplete="off">
+        <div class="staff-status-filter">
+          <button class="chip active" data-staff-status="all">Tous</button>
+          <button class="chip" data-staff-status="active">Actifs</button>
+          <button class="chip" data-staff-status="inactive">Désactivés</button>
+        </div>
+      </div>
+
       <div class="staff-list" id="staff-list">
         <!-- Staff cards injected -->
       </div>
