@@ -745,12 +745,23 @@ async function renderPlanning() {
     html += `<tr><td class="staff-col">${escapeHTML(staff.name)}</td>`;
     days.forEach(d => {
       const iso = isoFromDate(d);
-      const slot = state.planning.find(p => p.staff_id === staff.id && p.business_date === iso);
+      const cellSlots = state.planning
+        .filter(p => p.staff_id === staff.id && p.business_date === iso)
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+      const offSlot = cellSlots.find(isOffSlot);
       html += `<td data-staff="${staff.id}" data-date="${iso}">`;
-      if (slot) {
-        html += `<div class="plan-slot" style="border-left-color:${staff.color}" data-plan="${slot.id}">
-          <div class="plan-time">${slot.starts_at.slice(0,5)}–${slot.ends_at.slice(0,5)}</div>
-          ${slot.role_label ? `<div class="plan-role">${escapeHTML(slot.role_label)}</div>` : ''}
+      if (offSlot) {
+        html += `<div class="plan-off-chip" data-plan="${offSlot.id}">Repos</div>`;
+      } else {
+        cellSlots.forEach(slot => {
+          html += `<div class="plan-slot" style="border-left-color:${staff.color}" data-plan="${slot.id}">
+            <div class="plan-time">${slot.starts_at.slice(0,5)}–${slot.ends_at.slice(0,5)}</div>
+            ${slot.role_label ? `<div class="plan-role">${escapeHTML(slot.role_label)}</div>` : ''}
+          </div>`;
+        });
+        html += `<div class="cell-actions">
+          <button class="plan-add" type="button">+ créneau</button>
+          <button class="plan-off" type="button">Repos</button>
         </div>`;
       }
       html += '</td>';
@@ -767,11 +778,21 @@ async function renderPlanning() {
       if (planSlot) {
         const slot = state.planning.find(p => p.id === planSlot.dataset.plan);
         if (slot) openPlanModal(slot, td.dataset.staff, td.dataset.date);
-      } else {
-        openPlanModal(null, td.dataset.staff, td.dataset.date);
+        return;
       }
+      if (e.target.closest('.plan-off') || e.target.closest('.plan-off-chip')) {
+        toggleDayOff(td.dataset.staff, td.dataset.date);
+        return;
+      }
+      if (td.querySelector('.plan-off-chip')) return;
+      openPlanModal(null, td.dataset.staff, td.dataset.date);
     });
   });
+}
+
+// An "off"/rest day is stored as a planning row with equal start and end times.
+function isOffSlot(p) {
+  return p.starts_at === p.ends_at;
 }
 
 function monthShort(d) {
@@ -796,6 +817,7 @@ async function savePlan() {
   const startStr = $('#plan-start').value;
   const endStr = $('#plan-end').value;
   if (!startStr || !endStr) { toast('Début et fin requis', 'error'); return; }
+  if (startStr === endStr) { toast('Début et fin doivent différer', 'error'); return; }
 
   const payload = {
     staff_id: slot.staff_id,
@@ -828,6 +850,44 @@ async function deletePlan() {
   if (error) { toast('Impossible', 'error'); return; }
   toast('Supprimé');
   closeModal('#plan-modal');
+  await renderPlanning();
+}
+
+async function toggleDayOff(staffId, dateISO) {
+  const cellSlots = state.planning.filter(
+    p => p.staff_id === staffId && p.business_date === dateISO
+  );
+  const offSlot = cellSlots.find(isOffSlot);
+
+  if (offSlot) {
+    const { error } = await sb.from('planning').delete().eq('id', offSlot.id);
+    if (error) { console.error(error); toast('Impossible', 'error'); return; }
+    toast('Repos retiré');
+    await renderPlanning();
+    return;
+  }
+
+  const creneaux = cellSlots.filter(p => !isOffSlot(p));
+  if (creneaux.length &&
+      !confirm('Marquer repos ? Les créneaux du jour seront supprimés.')) return;
+
+  if (creneaux.length) {
+    const { error } = await sb.from('planning').delete().in('id', creneaux.map(p => p.id));
+    if (error) { console.error(error); toast('Impossible', 'error'); return; }
+  }
+
+  const { error } = await sb.from('planning').insert({
+    staff_id: staffId,
+    business_date: dateISO,
+    starts_at: '00:00:00',
+    ends_at: '00:00:00',
+    ends_next_day: false,
+    role_label: 'OFF',
+    note: null,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) { console.error(error); toast('Impossible', 'error'); return; }
+  toast('Repos marqué');
   await renderPlanning();
 }
 
