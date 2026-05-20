@@ -982,8 +982,6 @@ function startClockTicker() {
 // ── WIRING ───────────────────────────────────────────────────────────────────
 function wire() {
   // Auth
-  $('#auth-btn').addEventListener('click', tryLogin);
-  $('#auth-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
   $('#btn-logout').addEventListener('click', logout);
 
   // Tabs
@@ -1075,4 +1073,6 @@ function wire() {
 }
 
 // ── ENTRY ────────────────────────────────────────────────────────────────────
+$('#auth-btn').addEventListener('click', tryLogin);
+$('#auth-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
 checkAuth();
