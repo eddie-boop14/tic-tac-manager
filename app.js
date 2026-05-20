@@ -25,6 +25,8 @@ const state = {
   planning: [],
   range: { start: null, end: null, kind: 'this-month' },
   staffFilter: 'all', // 'all' or staff_id
+  staffSearch: '',
+  staffStatusFilter: 'all', // 'all' | 'active' | 'inactive'
   planningWeekStart: null,
   editing: { shift: null, staffRow: null, planSlot: null },
   managerName: localStorage.getItem('tornet.managerName') || '',
@@ -625,7 +627,30 @@ function renderStaffList() {
     return;
   }
 
-  state.staff.forEach(s => {
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const q = norm(state.staffSearch.trim());
+
+  const sorted = state.staff
+    .filter(s => {
+      if (state.staffStatusFilter === 'active' && !s.active) return false;
+      if (state.staffStatusFilter === 'inactive' && s.active) return false;
+      if (q && !norm(s.name).includes(q)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      // Active first, then newest (highest display_order) first; inactive sink to bottom.
+      if (!!a.active !== !!b.active) return a.active ? -1 : 1;
+      const ord = (b.display_order ?? 0) - (a.display_order ?? 0);
+      if (ord !== 0) return ord;
+      return a.name.localeCompare(b.name);
+    });
+
+  if (sorted.length === 0) {
+    list.innerHTML = '<div class="empty">aucun résultat</div>';
+    return;
+  }
+
+  sorted.forEach(s => {
     const card = document.createElement('div');
     card.className = 'staff-card' + (s.active ? '' : ' inactive');
     card.innerHTML = `
@@ -1113,6 +1138,18 @@ function wire() {
   $('#add-staff').addEventListener('click', () => openStaffModal(null));
   $('#staff-save').addEventListener('click', saveStaff);
   $('#staff-delete').addEventListener('click', deleteStaff);
+  $('#staff-search').addEventListener('input', (e) => {
+    state.staffSearch = e.target.value;
+    renderStaffList();
+  });
+  $('.staff-status-filter').addEventListener('click', (e) => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    $$('.staff-status-filter .chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    state.staffStatusFilter = btn.dataset.staffStatus;
+    renderStaffList();
+  });
 
   // Shift modal
   $('#shift-save').addEventListener('click', saveShift);
