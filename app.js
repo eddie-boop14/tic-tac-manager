@@ -294,7 +294,7 @@ function renderToday() {
       chip.innerHTML = `
         <span class="live-dot" style="${st === 'off' ? `background:${staff.color || '#5a8a6b'}` : ''}"></span>
         <div class="live-info">
-          <div class="live-name">${escapeHTML(s.staff_name)}</div>
+          <div class="live-name">${escapeHTML(s.staff_name)}${s.meal_taken ? ' <span class="meal-flag" title="repas pris">🍽</span>' : ''}</div>
           <div class="live-detail">${detail}</div>
         </div>
       `;
@@ -321,7 +321,7 @@ function renderToday() {
         <td>
           <div class="name-cell">
             <span class="name-dot" style="background:${staff.color || '#5a8a6b'}"></span>
-            ${escapeHTML(s.staff_name)}
+            ${escapeHTML(s.staff_name)}${s.meal_taken ? ' <span class="meal-flag" title="repas pris">🍽</span>' : ''}
           </div>
         </td>
         <td class="mono">${fmtTime(s.started_at)}</td>
@@ -466,7 +466,7 @@ async function renderHours() {
         <span class="mono">${s.ended_at ? fmtTime(s.ended_at) : '— en cours'}</span>
         <span class="mono">${s._pause > 0 ? 'p ' + fmtDuration(s._pause) : ''}</span>
         <span class="shift-net">${fmtDuration(s._net)}</span>
-        <span class="shift-src">${s.source === 'manager_edit' ? '✎ édité' : s.source === 'manager_create' ? '＋ créé' : ''}</span>
+        <span class="shift-src">${s.meal_taken ? '🍽 ' : ''}${s.source === 'manager_edit' ? '✎ édité' : s.source === 'manager_create' ? '＋ créé' : ''}</span>
         <button class="shift-validate${isValidated ? ' on' : ''}" type="button">${isValidated ? '✓ validé' : 'valider'}</button>
       `;
       row.addEventListener('click', (e) => {
@@ -549,6 +549,7 @@ function openShiftModal(shift) {
     $('#shift-pause').value = m.pause;
     $('#shift-note').value = '';
     $('#shift-delete').classList.remove('hidden');
+    $('#shift-meal').classList.toggle('hidden', !shift.meal_taken);
     updateShiftTotals();
   } else {
     sel.value = state.staff[0]?.id || '';
@@ -558,6 +559,7 @@ function openShiftModal(shift) {
     $('#shift-pause').value = 0;
     $('#shift-note').value = '';
     $('#shift-delete').classList.add('hidden');
+    $('#shift-meal').classList.add('hidden');
     $('#shift-totals').textContent = '—';
   }
 
