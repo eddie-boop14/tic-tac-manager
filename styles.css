@@ -662,6 +662,19 @@ body {
 .detail-shift.validated:hover { background: rgba(47, 108, 181, 0.10); }
 .detail-shift.validated .shift-net { color: var(--moss-2); }
 
+.meal-flag { font-size: 12px; }
+
+.shift-meal {
+  padding: 8px 14px;
+  border-radius: var(--r);
+  background: var(--wood-soft);
+  color: var(--wood-2);
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  text-align: center;
+}
+
 /* ── PLANNING ────────────────────────────────────────────────────────────── */
 .planning-controls {
   display: flex;
