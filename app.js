@@ -549,10 +549,7 @@ function openShiftModal(shift) {
     $('#shift-pause').value = m.pause;
     $('#shift-note').value = '';
     $('#shift-delete').classList.remove('hidden');
-    const meals = shift.meals_count || 0;
-    const mealEl = $('#shift-meal');
-    mealEl.textContent = meals > 0 ? `${meals} repas pris ce jour` : '';
-    mealEl.classList.toggle('hidden', meals === 0);
+    setMealPicker(shift.meals_count || 0);
     updateShiftTotals();
   } else {
     sel.value = state.staff[0]?.id || '';
@@ -562,9 +559,7 @@ function openShiftModal(shift) {
     $('#shift-pause').value = 0;
     $('#shift-note').value = '';
     $('#shift-delete').classList.add('hidden');
-    const mealEl = $('#shift-meal');
-    mealEl.textContent = '';
-    mealEl.classList.add('hidden');
+    setMealPicker(0);
     $('#shift-totals').textContent = '—';
   }
 
@@ -573,6 +568,16 @@ function openShiftModal(shift) {
   });
 
   $('#shift-modal').classList.remove('hidden');
+}
+
+function setMealPicker(count) {
+  const picker = $('#shift-meal');
+  picker.dataset.meals = String(count);
+  picker.querySelectorAll('.meal-opt').forEach(btn => {
+    const v = Number(btn.dataset.meals);
+    btn.classList.toggle('active', v === count);
+    btn.onclick = () => setMealPicker(v);
+  });
 }
 
 function updateShiftTotals() {
@@ -645,7 +650,7 @@ async function saveShift() {
     net_minutes: net,
     source: state.editing.shift ? 'manager_edit' : 'manager_create',
     note: note || null,
-    meals_count: state.editing.shift?.meals_count ?? 0,
+    meals_count: parseInt($('#shift-meal').dataset.meals, 10) || 0,
     updated_at: new Date().toISOString(),
   };
 

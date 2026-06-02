@@ -682,6 +682,35 @@ body {
   text-align: center;
 }
 
+.meal-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.meal-opt {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: var(--r);
+  border: var(--hairline);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+
+.meal-opt:hover {
+  border-color: var(--moss);
+}
+
+.meal-opt.active {
+  background: #1f7a3a;
+  border-color: #1f7a3a;
+  color: #fff;
+  font-weight: 700;
+}
+
 /* ── PLANNING ────────────────────────────────────────────────────────────── */
 .planning-controls {
   display: flex;
