@@ -522,6 +522,25 @@ body {
   gap: 4px;
 }
 
+.summary-add {
+  margin-top: 8px;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: var(--r);
+  border: var(--hairline);
+  background: transparent;
+  color: var(--paper-3);
+  font-family: var(--sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+
+.summary-add:hover {
+  border-color: var(--moss);
+  color: var(--moss);
+}
+
 .summary-name {
   display: flex;
   align-items: center;

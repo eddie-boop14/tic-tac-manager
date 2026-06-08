@@ -434,7 +434,11 @@ async function renderHours() {
           ${g.shifts.length} services · ${days} jours · ${fmtDuration(avg)}/jour moyen
         </div>
         ${warn}
+        <button class="summary-add" type="button">＋ Ajouter un service</button>
       `;
+      card.querySelector('.summary-add').addEventListener('click', () => {
+        openShiftModal(null, { staffId: g.staff.id });
+      });
       summary.appendChild(card);
     });
   }
@@ -527,7 +531,7 @@ function daysBetween(startISO, endISO) {
 }
 
 // ── SHIFT MODAL ──────────────────────────────────────────────────────────────
-function openShiftModal(shift) {
+function openShiftModal(shift, opts = {}) {
   state.editing.shift = shift ? { ...shift } : null;
 
   // Fill staff select
@@ -552,7 +556,7 @@ function openShiftModal(shift) {
     setMealPicker(shift.meals_count || 0);
     updateShiftTotals();
   } else {
-    sel.value = state.staff[0]?.id || '';
+    sel.value = opts.staffId || state.staff[0]?.id || '';
     $('#shift-date').value = todayISO();
     $('#shift-start').value = '';
     $('#shift-end').value = '';
