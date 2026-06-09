@@ -681,6 +681,46 @@ body {
 .detail-shift.validated:hover { background: rgba(47, 108, 181, 0.10); }
 .detail-shift.validated .shift-net { color: var(--moss-2); }
 
+.bulk-validate {
+  background: var(--moss);
+  border: 1px solid var(--moss);
+  color: #fff;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bulk-validate:hover { filter: brightness(0.92); }
+
+.bulk-validate.all { margin-left: auto; margin-right: 8px; }
+
+.bulk-validate.week {
+  background: transparent;
+  color: var(--moss-2);
+  font-weight: 500;
+}
+.bulk-validate.week:hover { background: var(--moss-soft); }
+
+.detail-week {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--ink-3, var(--ink-2));
+  border-top: var(--hairline);
+  border-bottom: var(--hairline);
+}
+.detail-week-label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--paper-3);
+}
+
 .meal-flag {
   font-weight: 700;
   color: #1f7a3a;

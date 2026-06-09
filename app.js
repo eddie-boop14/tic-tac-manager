@@ -450,39 +450,74 @@ async function renderHours() {
     if (!g.staff) return;
     const wrap = document.createElement('div');
     wrap.className = 'detail-staff';
+    const pendingAll = g.shifts.filter(s => !validatedShiftIds.has(s.id));
     wrap.innerHTML = `
       <div class="detail-staff-head">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${g.staff.color};"></span>
         <span class="detail-staff-name">${escapeHTML(g.staff.name)}</span>
         <span class="detail-staff-total">${fmtDuration(g.totalNet)}</span>
+        ${pendingAll.length > 0 ? `<button class="bulk-validate all" type="button">Tout valider (${pendingAll.length})</button>` : ''}
         <span class="detail-toggle">›</span>
       </div>
       <div class="detail-shifts"></div>
     `;
-    const shiftsWrap = wrap.querySelector('.detail-shifts');
-    g.shifts.forEach(s => {
-      const row = document.createElement('div');
-      const isValidated = validatedShiftIds.has(s.id);
-      row.className = 'detail-shift' + (isValidated ? ' validated' : '');
-      row.innerHTML = `
-        <span class="shift-date">${fmtDateShort(new Date(s.business_date))}</span>
-        <span class="mono">${fmtTime(s.started_at)}</span>
-        <span class="mono">${s.ended_at ? fmtTime(s.ended_at) : '— en cours'}</span>
-        <span class="mono">${s._pause > 0 ? 'p ' + fmtDuration(s._pause) : ''}</span>
-        <span class="shift-net">${fmtDuration(s._net)}</span>
-        <span class="shift-src">${s.meals_count > 0 ? `<span class="meal-flag" title="${s.meals_count} repas pris">${s.meals_count} repas</span> ` : ''}${s.source === 'manager_edit' ? '✎ édité' : s.source === 'manager_create' ? '＋ créé' : ''}</span>
-        <button class="shift-validate${isValidated ? ' on' : ''}" type="button">${isValidated ? '✓ validé' : 'valider'}</button>
-      `;
-      row.addEventListener('click', (e) => {
-        if (e.target.closest('.shift-validate')) return;
-        openShiftModal(s);
-      });
-      row.querySelector('.shift-validate').addEventListener('click', (e) => {
+    if (pendingAll.length > 0) {
+      wrap.querySelector('.bulk-validate.all').addEventListener('click', (e) => {
         e.stopPropagation();
-        toggleShiftValidation(s);
+        validateMany(pendingAll);
       });
-      shiftsWrap.appendChild(row);
+    }
+    const shiftsWrap = wrap.querySelector('.detail-shifts');
+
+    const weeks = new Map();
+    const weekOrder = [];
+    g.shifts.forEach(s => {
+      const ws = weekStartISO(s.business_date);
+      if (!weeks.has(ws)) { weeks.set(ws, []); weekOrder.push(ws); }
+      weeks.get(ws).push(s);
     });
+
+    weekOrder.forEach(ws => {
+      const weekShifts = weeks.get(ws);
+      const weekPending = weekShifts.filter(s => !validatedShiftIds.has(s.id));
+      const weekHeader = document.createElement('div');
+      weekHeader.className = 'detail-week';
+      weekHeader.innerHTML = `
+        <span class="detail-week-label">${weekRangeLabel(ws)}</span>
+        ${weekPending.length > 0 ? `<button class="bulk-validate week" type="button">Valider la semaine (${weekPending.length})</button>` : ''}
+      `;
+      if (weekPending.length > 0) {
+        weekHeader.querySelector('.bulk-validate.week').addEventListener('click', () => {
+          validateMany(weekPending);
+        });
+      }
+      shiftsWrap.appendChild(weekHeader);
+
+      weekShifts.forEach(s => {
+        const row = document.createElement('div');
+        const isValidated = validatedShiftIds.has(s.id);
+        row.className = 'detail-shift' + (isValidated ? ' validated' : '');
+        row.innerHTML = `
+          <span class="shift-date">${fmtDateShort(new Date(s.business_date))}</span>
+          <span class="mono">${fmtTime(s.started_at)}</span>
+          <span class="mono">${s.ended_at ? fmtTime(s.ended_at) : '— en cours'}</span>
+          <span class="mono">${s._pause > 0 ? 'p ' + fmtDuration(s._pause) : ''}</span>
+          <span class="shift-net">${fmtDuration(s._net)}</span>
+          <span class="shift-src">${s.meals_count > 0 ? `<span class="meal-flag" title="${s.meals_count} repas pris">${s.meals_count} repas</span> ` : ''}${s.source === 'manager_edit' ? '✎ édité' : s.source === 'manager_create' ? '＋ créé' : ''}</span>
+          <button class="shift-validate${isValidated ? ' on' : ''}" type="button">${isValidated ? '✓ validé' : 'valider'}</button>
+        `;
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.shift-validate')) return;
+          openShiftModal(s);
+        });
+        row.querySelector('.shift-validate').addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleShiftValidation(s);
+        });
+        shiftsWrap.appendChild(row);
+      });
+    });
+
     wrap.querySelector('.detail-staff-head').addEventListener('click', () => {
       wrap.classList.toggle('open');
     });
@@ -523,6 +558,38 @@ async function toggleShiftValidation(shift) {
     toast('Jour validé ✓');
   }
   renderHours();
+}
+
+async function validateMany(shifts) {
+  if (!shifts.length) return;
+  const rows = shifts.map(s => ({
+    staff_id: s.staff_id,
+    range_start: s.business_date,
+    range_end: s.business_date,
+    scope: 'custom',
+    total_minutes: computeShiftMinutes(s).net || 0,
+    shift_ids: [s.id],
+    validated_by: state.managerName || 'manager',
+    note: null,
+  }));
+  const { error } = await sb.from('validations').insert(rows);
+  if (error) { console.error(error); toast('Validation impossible', 'error'); return; }
+  toast(`${shifts.length} service${shifts.length > 1 ? 's' : ''} validé${shifts.length > 1 ? 's' : ''} ✓`);
+  renderHours();
+}
+
+function weekStartISO(dateISO) {
+  const d = new Date(dateISO + 'T00:00:00');
+  const dow = d.getDay() || 7;
+  d.setDate(d.getDate() - dow + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function weekRangeLabel(weekISO) {
+  const start = new Date(weekISO + 'T00:00:00');
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return `Semaine du ${fmtDateShort(start)} au ${fmtDateShort(end)}`;
 }
 
 function daysBetween(startISO, endISO) {
