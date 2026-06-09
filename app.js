@@ -940,9 +940,8 @@ async function renderPlanning() {
           </div>`;
         });
         weekMin += cellMin;
-        const showTotal = cellSlots.length > 1 || cellSlots.some(s => (s.pause_minutes || 0) > 0);
-        if (showTotal && cellMin > 0) {
-          html += `<div class="plan-cell-total">= ${fmtDuration(cellMin)}</div>`;
+        if (cellMin > 0) {
+          html += `<div class="plan-cell-total">${fmtDuration(cellMin)}</div>`;
         }
         html += `<div class="cell-actions">
           <button class="plan-add" type="button">+ créneau</button>
