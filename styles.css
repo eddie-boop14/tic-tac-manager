@@ -869,6 +869,39 @@ body {
   font-size: 10px;
 }
 
+.plan-slot .plan-pause {
+  font-family: var(--sans);
+  font-size: 10px;
+  color: var(--paper-3);
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.plan-cell-total {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--moss-2);
+  text-align: right;
+  padding: 3px 4px 0;
+  margin-top: 2px;
+  border-top: 1px dashed rgba(47, 108, 181, 0.18);
+}
+
+.plan-week-col {
+  text-align: right;
+}
+
+.plan-week-total {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--moss-2);
+  text-align: right;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
 .cell-actions {
   display: flex;
   gap: 3px;
