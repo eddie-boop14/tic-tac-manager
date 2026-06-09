@@ -409,7 +409,7 @@ async function renderHours() {
       // Planned minutes from the planning grid for this staff in the range
       const plannedMin = rangePlanning
         .filter(p => p.staff_id === g.staff.id && !isOffSlot(p))
-        .reduce((sum, p) => sum + creneauMinutes(p), 0);
+        .reduce((sum, p) => sum + creneauNetMinutes(p), 0);
 
       // Compute estimated hours for the range based on contract
       const days_in_range = daysBetween(state.range.start, state.range.end) + 1;
@@ -531,6 +531,10 @@ function creneauMinutes(p) {
   let s = toMin(p.starts_at), e = toMin(p.ends_at);
   if (p.ends_next_day || e < s) e += 1440;
   return Math.max(0, e - s);
+}
+
+function creneauNetMinutes(p) {
+  return Math.max(0, creneauMinutes(p) - (p.pause_minutes || 0));
 }
 
 async function toggleShiftValidation(shift) {
@@ -910,9 +914,11 @@ async function renderPlanning() {
     const isToday = iso === todayIso;
     html += `<th class="${isToday ? 'today' : ''}">${fmtDateShort(d)}</th>`;
   });
+  html += '<th class="plan-week-col">Semaine</th>';
   html += '</tr></thead><tbody>';
 
   state.staff.filter(s => s.active).forEach(staff => {
+    let weekMin = 0;
     html += `<tr><td class="staff-col">${escapeHTML(staff.name)}</td>`;
     days.forEach(d => {
       const iso = isoFromDate(d);
@@ -924,12 +930,20 @@ async function renderPlanning() {
       if (offSlot) {
         html += `<div class="plan-off-chip" data-plan="${offSlot.id}">Repos</div>`;
       } else {
+        let cellMin = 0;
         cellSlots.forEach(slot => {
+          cellMin += creneauNetMinutes(slot);
           html += `<div class="plan-slot" style="border-left-color:${staff.color}" data-plan="${slot.id}">
             <div class="plan-time">${slot.starts_at.slice(0,5)}–${slot.ends_at.slice(0,5)}</div>
             ${slot.role_label ? `<div class="plan-role">${escapeHTML(slot.role_label)}</div>` : ''}
+            ${slot.pause_minutes > 0 ? `<div class="plan-pause">pause ${slot.pause_minutes}</div>` : ''}
           </div>`;
         });
+        weekMin += cellMin;
+        const showTotal = cellSlots.length > 1 || cellSlots.some(s => (s.pause_minutes || 0) > 0);
+        if (showTotal && cellMin > 0) {
+          html += `<div class="plan-cell-total">= ${fmtDuration(cellMin)}</div>`;
+        }
         html += `<div class="cell-actions">
           <button class="plan-add" type="button">+ créneau</button>
           <button class="plan-off" type="button">Repos</button>
@@ -937,6 +951,7 @@ async function renderPlanning() {
       }
       html += '</td>';
     });
+    html += `<td class="plan-week-total">${weekMin > 0 ? fmtDuration(weekMin) : '—'}</td>`;
     html += '</tr>';
   });
   html += '</tbody>';
@@ -979,8 +994,19 @@ function openPlanModal(slot, staffId, dateISO) {
   $('#plan-end').value = slot ? slot.ends_at.slice(0,5) : '';
   $('#plan-role').value = slot?.role_label || '';
   $('#plan-note').value = slot?.note || '';
+  setPausePicker(slot?.pause_minutes || 0);
   $('#plan-delete').classList.toggle('hidden', !slot);
   $('#plan-modal').classList.remove('hidden');
+}
+
+function setPausePicker(minutes) {
+  const picker = $('#plan-pause');
+  picker.dataset.pause = String(minutes);
+  picker.querySelectorAll('.meal-opt').forEach(btn => {
+    const v = Number(btn.dataset.pause);
+    btn.classList.toggle('active', v === minutes);
+    btn.onclick = () => setPausePicker(v);
+  });
 }
 
 async function savePlan() {
@@ -998,6 +1024,7 @@ async function savePlan() {
     ends_next_day: endStr < startStr, // simple cross-midnight detection
     role_label: $('#plan-role').value.trim() || null,
     note: $('#plan-note').value.trim() || null,
+    pause_minutes: parseInt($('#plan-pause').dataset.pause, 10) || 0,
     updated_at: new Date().toISOString(),
   };
 
