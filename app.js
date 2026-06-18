@@ -505,10 +505,13 @@ async function renderHours() {
       if (signoff) {
         if (signoff.employee_signed_at) {
           const when = new Date(signoff.employee_signed_at).toLocaleDateString('fr-FR');
-          signoffHTML = `<span class="signoff-badge signed">Signé par ${escapeHTML(signoff.employee_name || '—')} · ${when}</span>`;
-        } else if (signoff.has_dispute) {
-          signoffHTML = `<span class="signoff-badge dispute">Contesté${signoff.dispute_note ? ' · ' + escapeHTML(signoff.dispute_note) : ''}</span>
-            <button class="btn-signoff resend" type="button" data-staff="${g.staff.id}" data-week="${ws}">Renvoyer</button>`;
+          if (signoff.has_dispute) {
+            signoffHTML = `<span class="signoff-badge dispute">Correction demandée par ${escapeHTML(signoff.employee_name || '—')} · ${when}</span>
+              <span class="signoff-dispute-note">${escapeHTML(signoff.dispute_note || '')}</span>
+              <button class="btn-signoff resend" type="button" data-staff="${g.staff.id}" data-week="${ws}">Corriger et renvoyer</button>`;
+          } else {
+            signoffHTML = `<span class="signoff-badge signed">Signé par ${escapeHTML(signoff.employee_name || '—')} · ${when}</span>`;
+          }
         } else {
           signoffHTML = `<span class="signoff-badge pending">En attente de signature</span>
             <button class="btn-signoff resend" type="button" data-staff="${g.staff.id}" data-week="${ws}">Renvoyer</button>`;
