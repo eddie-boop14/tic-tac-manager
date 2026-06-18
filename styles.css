@@ -721,6 +721,36 @@ body {
   color: var(--paper-3);
 }
 
+.signoff-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+.signoff-badge.signed  { background: #d4edda; color: #1a5c2a; }
+.signoff-badge.pending { background: #fff3cd; color: #7a5200; }
+.signoff-badge.dispute { background: #fde8e8; color: #8b1a1a; }
+
+.btn-signoff {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.btn-signoff.send   { color: #2f6cb5; }
+.btn-signoff.resend { color: #888; border-color: #ccc; }
+.btn-signoff:hover  { opacity: 0.75; }
+
 .meal-flag {
   font-weight: 700;
   color: #1f7a3a;

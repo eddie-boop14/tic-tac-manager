@@ -30,6 +30,7 @@ const state = {
   planningWeekStart: null,
   editing: { shift: null, staffRow: null, planSlot: null },
   managerName: localStorage.getItem('tornet.managerName') || '',
+  signoffs: [],
 };
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -184,6 +185,9 @@ async function boot() {
         renderHours();
       }
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_signoffs' }, async () => {
+      if (state.activeTab === 'hours') { await loadSignoffsForRange(); renderHours(); }
+    })
     .subscribe();
 }
 
@@ -216,6 +220,16 @@ async function loadShiftsForRange() {
     .order('started_at', { ascending: false });
   if (error) { console.error(error); toast('Chargement shifts impossible', 'error'); return; }
   state.shifts = data || [];
+}
+
+async function loadSignoffsForRange() {
+  const { data, error } = await sb
+    .from('staff_signoffs')
+    .select('*')
+    .gte('week_start', state.range.start)
+    .lte('week_end', state.range.end);
+  if (error) { console.error(error); return; }
+  state.signoffs = data || [];
 }
 
 async function loadPlanning(weekStartISO, weekEndISO) {
@@ -372,6 +386,7 @@ async function renderHours() {
   const rangePlanning = planRes.data || [];
   const validatedShiftIds = new Set();
   (valRes.data || []).forEach(v => (v.shift_ids || []).forEach(id => validatedShiftIds.add(id)));
+  await loadSignoffsForRange();
 
   // Apply staff filter
   let shifts = state.shifts;
@@ -482,9 +497,30 @@ async function renderHours() {
       const weekPending = weekShifts.filter(s => !validatedShiftIds.has(s.id));
       const weekHeader = document.createElement('div');
       weekHeader.className = 'detail-week';
+
+      const signoff = state.signoffs.find(
+        so => so.staff_id === g.staff.id && so.week_start === ws
+      );
+      let signoffHTML = '';
+      if (signoff) {
+        if (signoff.employee_signed_at) {
+          const when = new Date(signoff.employee_signed_at).toLocaleDateString('fr-FR');
+          signoffHTML = `<span class="signoff-badge signed">Signé par ${escapeHTML(signoff.employee_name || '—')} · ${when}</span>`;
+        } else if (signoff.has_dispute) {
+          signoffHTML = `<span class="signoff-badge dispute">Contesté${signoff.dispute_note ? ' · ' + escapeHTML(signoff.dispute_note) : ''}</span>
+            <button class="btn-signoff resend" type="button" data-staff="${g.staff.id}" data-week="${ws}">Renvoyer</button>`;
+        } else {
+          signoffHTML = `<span class="signoff-badge pending">En attente de signature</span>
+            <button class="btn-signoff resend" type="button" data-staff="${g.staff.id}" data-week="${ws}">Renvoyer</button>`;
+        }
+      } else if (weekPending.length === 0) {
+        signoffHTML = `<button class="btn-signoff send" type="button" data-staff="${g.staff.id}" data-week="${ws}">Envoyer pour signature</button>`;
+      }
+
       weekHeader.innerHTML = `
         <span class="detail-week-label">${weekRangeLabel(ws)}</span>
         ${weekPending.length > 0 ? `<button class="bulk-validate week" type="button">Valider la semaine (${weekPending.length})</button>` : ''}
+        ${signoffHTML}
       `;
       if (weekPending.length > 0) {
         weekHeader.querySelector('.bulk-validate.week').addEventListener('click', () => {
@@ -492,6 +528,12 @@ async function renderHours() {
         });
       }
       shiftsWrap.appendChild(weekHeader);
+      const sendBtn = weekHeader.querySelector('.btn-signoff.send, .btn-signoff.resend');
+      if (sendBtn) {
+        sendBtn.addEventListener('click', () => {
+          sendForSignature(sendBtn.dataset.staff, sendBtn.dataset.week, weekShifts);
+        });
+      }
 
       weekShifts.forEach(s => {
         const row = document.createElement('div');
@@ -561,6 +603,29 @@ async function toggleShiftValidation(shift) {
     if (error) { console.error(error); toast('Validation impossible', 'error'); return; }
     toast('Jour validé ✓');
   }
+  renderHours();
+}
+
+async function sendForSignature(staffId, weekISO, shifts) {
+  if (!shifts.length) { toast('Aucun service à envoyer', 'error'); return; }
+  const weekEnd = isoFromDate(addDays(new Date(weekISO), 6));
+  const { error } = await sb
+    .from('staff_signoffs')
+    .upsert({
+      staff_id: staffId,
+      week_start: weekISO,
+      week_end: weekEnd,
+      shift_ids: shifts.map(s => s.id),
+      sent_by: state.managerName || 'manager',
+      sent_at: new Date().toISOString(),
+      employee_signed_at: null,
+      employee_name: null,
+      has_dispute: false,
+      dispute_note: null,
+    }, { onConflict: 'staff_id,week_start' });
+  if (error) { console.error(error); toast('Envoi impossible', 'error'); return; }
+  toast('Envoyé pour signature');
+  await loadSignoffsForRange();
   renderHours();
 }
 
