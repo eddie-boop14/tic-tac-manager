@@ -1418,6 +1418,22 @@ body {
     color: black !important;
   }
   .detail-shifts { display: block !important; }
+
+  /* Planning: hide the toolbar, show the legal header, print the grid clean */
+  .planning-controls { display: none !important; }
+  .plan-print-head {
+    display: block !important;
+    color: black !important;
+    font-weight: 700;
+    font-size: 13pt;
+    margin: 0 0 10px 0;
+  }
+  .planning-grid, .planning-grid th, .planning-grid td {
+    color: black !important;
+    border-color: #333 !important;
+    page-break-inside: avoid;
+  }
+  .plan-slot, .plan-off-chip { color: black !important; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -1458,6 +1474,31 @@ body {
   color: var(--paper);
   border-color: var(--moss-soft);
 }
+
+/* ── PLANNING PÔLE FILTER (cuisine / salle / snack) ──────────────────────── */
+.pole-filter { display: inline-flex; gap: 4px; align-items: center; }
+.pole-btn {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--paper-3);
+  padding: 0.34rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--t1) var(--ease), color var(--t1) var(--ease), border-color var(--t1) var(--ease);
+}
+.pole-btn:hover { color: var(--paper); }
+.pole-btn.active {
+  background: var(--moss);
+  color: var(--ink);
+  border-color: var(--moss);
+}
+
+/* Legal print header — hidden on screen, shown only when printing */
+.plan-print-head { display: none; }
 
 /* Slight squeeze on narrower screens */
 @media (max-width: 980px) {

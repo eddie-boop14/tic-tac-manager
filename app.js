@@ -29,6 +29,7 @@ const state = {
   staffSearch: '',
   staffStatusFilter: 'all', // 'all' | 'active' | 'inactive'
   planningWeekStart: null,
+  planningPole: 'all',   // 'all' | 'cuisine' | 'salle' | 'snack' — planning row filter
   editing: { shift: null, staffRow: null, planSlot: null },
   managerName: localStorage.getItem('ttq.managerName') || '',
   signoffs: [],
@@ -944,6 +945,7 @@ function openStaffModal(staff) {
     $('#staff-color').value = staff.color || '#5a8a6b';
     $('#staff-rate').value = staff.hourly_rate ?? '';
     $('#staff-etab').value = staff.etablissement || defaultEtab();
+    $('#staff-pole').value = staff.pole || '';
     $('#staff-active').checked = staff.active;
     $('#staff-delete').classList.remove('hidden');
   } else {
@@ -954,6 +956,7 @@ function openStaffModal(staff) {
     $('#staff-color').value = '#5a8a6b';
     $('#staff-rate').value = '';
     $('#staff-etab').value = defaultEtab();
+    $('#staff-pole').value = '';
     $('#staff-active').checked = true;
     $('#staff-delete').classList.add('hidden');
   }
@@ -967,12 +970,13 @@ async function saveStaff() {
   const color = $('#staff-color').value;
   const rate = parseFloat($('#staff-rate').value) || null;
   const etablissement = $('#staff-etab').value;
+  const pole = $('#staff-pole').value || null;
   const active = $('#staff-active').checked;
 
   if (!name) { toast('Nom requis', 'error'); return; }
   if (!/^[0-9]{4}$/.test(pin)) { toast('PIN à 4 chiffres requis', 'error'); return; }
 
-  const payload = { name, pin, contract_h: contract, color, hourly_rate: rate, active, etablissement };
+  const payload = { name, pin, contract_h: contract, color, hourly_rate: rate, active, etablissement, pole };
 
   let res;
   if (state.editing.staffRow) {
@@ -1021,6 +1025,15 @@ async function renderPlanning() {
   $('#planning-week-label').textContent =
     `Semaine du ${weekStart.getDate()} ${monthShort(weekStart)} → ${weekEnd.getDate()} ${monthShort(weekEnd)}`;
 
+  // Print-only legal header: which restaurant + which pole + which week
+  const siteLabel = state.site === 'chez-nous' ? 'Chez Nous à la Plage'
+    : state.site === 'tornet' ? 'Chalet du Tornet'
+    : 'Tous établissements';
+  const poleLabel = state.planningPole === 'all' ? 'Tous pôles'
+    : state.planningPole.charAt(0).toUpperCase() + state.planningPole.slice(1);
+  const ph = $('#plan-print-head');
+  if (ph) ph.textContent = `${siteLabel} · ${poleLabel} · Semaine du ${weekStart.getDate()} ${monthShort(weekStart)} → ${weekEnd.getDate()} ${monthShort(weekEnd)}`;
+
   await loadPlanning(state.planningWeekStart, weekEndISO);
 
   // Build the grid
@@ -1038,7 +1051,9 @@ async function renderPlanning() {
   html += '<th class="plan-week-col">Semaine</th>';
   html += '</tr></thead><tbody>';
 
-  state.staff.filter(s => s.active).forEach(staff => {
+  state.staff
+    .filter(s => s.active && (state.planningPole === 'all' || s.pole === state.planningPole))
+    .forEach(staff => {
     let weekMin = 0;
     html += `<tr><td class="staff-col">${escapeHTML(staff.name)}</td>`;
     days.forEach(d => {
@@ -1470,6 +1485,11 @@ function wire() {
   });
   $('#plan-copy-prev').addEventListener('click', copyPrevWeek);
   $('#plan-print').addEventListener('click', printPlanning);
+  $$('#plan-pole-filter .pole-btn').forEach(btn => btn.addEventListener('click', () => {
+    state.planningPole = btn.dataset.pole;
+    $$('#plan-pole-filter .pole-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderPlanning();
+  }));
   $('#plan-save').addEventListener('click', savePlan);
   $('#plan-delete').addEventListener('click', deletePlan);
 

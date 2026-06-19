@@ -150,9 +150,18 @@
         <button class="btn-icon" id="plan-next">›</button>
         <button class="btn-mini" id="plan-today">Cette semaine</button>
         <span class="rule"></span>
+        <div class="pole-filter" id="plan-pole-filter">
+          <button class="pole-btn active" data-pole="all">Tous</button>
+          <button class="pole-btn" data-pole="cuisine">Cuisine</button>
+          <button class="pole-btn" data-pole="salle">Salle</button>
+          <button class="pole-btn" data-pole="snack">Snack</button>
+        </div>
+        <span class="rule"></span>
         <button class="btn-mini" id="plan-copy-prev">↻ Copier semaine précédente</button>
         <button class="btn-mini" id="plan-print">🖨 Imprimer</button>
       </div>
+
+      <div class="plan-print-head" id="plan-print-head"></div>
 
       <div class="planning-grid-wrap">
         <table class="planning-grid" id="planning-grid">
@@ -285,6 +294,15 @@
           <select id="staff-etab">
             <option value="chez-nous">Chez Nous à la Plage</option>
             <option value="tornet">Chalet du Tornet</option>
+          </select>
+        </label>
+        <label class="field-col">
+          <span class="field-label">Pôle (filtre planning · indépendant de la couleur)</span>
+          <select id="staff-pole">
+            <option value="">— non assigné —</option>
+            <option value="cuisine">Cuisine</option>
+            <option value="salle">Salle</option>
+            <option value="snack">Snack</option>
           </select>
         </label>
         <label class="field-row">
