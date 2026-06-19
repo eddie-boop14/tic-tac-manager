@@ -19,6 +19,7 @@ const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
 const state = {
   activeTab: 'today',
+  site: localStorage.getItem('ttq.site') || 'all',  // 'all' | 'chez-nous' | 'tornet'
   staff: [],
   shifts: [],       // shifts in current range/view
   liveShifts: [],   // open shifts (ended_at = null)
@@ -29,9 +30,54 @@ const state = {
   staffStatusFilter: 'all', // 'all' | 'active' | 'inactive'
   planningWeekStart: null,
   editing: { shift: null, staffRow: null, planSlot: null },
-  managerName: localStorage.getItem('tornet.managerName') || '',
+  managerName: localStorage.getItem('ttq.managerName') || '',
   signoffs: [],
 };
+
+// ── SITE FILTER HELPER ─────────────────────────────────────────────────────
+// Wraps a Supabase query builder with an etablissement filter when the
+// active site is not 'all'. Centralizes the multi-tenant scoping so we
+// don't sprinkle .eq() calls everywhere.
+function bySite(query) {
+  if (state.site === 'all') return query;
+  return query.eq('etablissement', state.site);
+}
+
+// When inserting/updating, default etablissement based on context.
+// Returns the etablissement to write: explicit choice > active site filter > 'tornet'.
+function defaultEtab(explicit) {
+  if (explicit && explicit !== 'all') return explicit;
+  if (state.site !== 'all') return state.site;
+  return 'tornet';
+}
+
+// Apply site selection: persist, set body attribute, swap brand UI,
+// update theme-color meta. The CSS does the rest via [data-site].
+function applySite(site) {
+  state.site = site;
+  localStorage.setItem('ttq.site', site);
+  document.body.setAttribute('data-site', site);
+
+  // Update chip active state
+  $$('.site-chip').forEach(c => c.classList.toggle('active', c.dataset.site === site));
+
+  // Brand swap
+  const brandEl = $('#brand-name');
+  if (brandEl) {
+    brandEl.textContent =
+      site === 'chez-nous' ? 'Chez Nous à la Plage' :
+      site === 'tornet'    ? 'Chalet du Tornet'     :
+      'Tic-Tac-Quack';
+  }
+
+  // theme-color meta for status bar
+  const themeColor =
+    site === 'chez-nous' ? '#0a1628' :
+    site === 'tornet'    ? '#efece4' :
+    '#1d2733';
+  const meta = $('#meta-theme-color');
+  if (meta) meta.setAttribute('content', themeColor);
+}
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 function escapeHTML(s) {
@@ -138,7 +184,7 @@ function shiftState(shift) {
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────
 function checkAuth() {
-  const ok = sessionStorage.getItem('tornet.authed') === '1';
+  const ok = sessionStorage.getItem('ttq.authed') === '1';
   if (ok) enterApp();
   else $('#auth-input').focus();
 }
@@ -146,7 +192,7 @@ function checkAuth() {
 function tryLogin() {
   const input = $('#auth-input').value.trim();
   if (input === MANAGER_CODE) {
-    sessionStorage.setItem('tornet.authed', '1');
+    sessionStorage.setItem('ttq.authed', '1');
     enterApp();
   } else {
     $('#auth-hint').textContent = 'Code incorrect';
@@ -162,7 +208,7 @@ async function enterApp() {
 
 function logout() {
   if (!confirm('Déconnexion ?')) return;
-  sessionStorage.removeItem('tornet.authed');
+  sessionStorage.removeItem('ttq.authed');
   location.reload();
 }
 
@@ -193,17 +239,17 @@ async function boot() {
 
 // ── DATA LOADING ─────────────────────────────────────────────────────────────
 async function loadStaff() {
-  const { data, error } = await sb.from('staff').select('*').order('display_order');
+  const { data, error } = await bySite(sb.from('staff').select('*')).order('display_order');
   if (error) { console.error(error); toast('Chargement staff impossible', 'error'); return; }
   state.staff = data || [];
   renderStaffFilter();
 }
 
 async function loadLiveShifts() {
-  const { data, error } = await sb
+  const { data, error } = await bySite(sb
     .from('shifts')
     .select('*')
-    .is('ended_at', null)
+    .is('ended_at', null))
     .order('started_at', { ascending: false });
   if (error) { console.error(error); return; }
   state.liveShifts = data || [];
@@ -211,11 +257,11 @@ async function loadLiveShifts() {
 
 async function loadShiftsForRange() {
   if (!state.range.start) computeRange(state.range.kind);
-  const { data, error } = await sb
+  const { data, error } = await bySite(sb
     .from('shifts')
     .select('*')
     .gte('business_date', state.range.start)
-    .lte('business_date', state.range.end)
+    .lte('business_date', state.range.end))
     .order('business_date', { ascending: false })
     .order('started_at', { ascending: false });
   if (error) { console.error(error); toast('Chargement shifts impossible', 'error'); return; }
@@ -223,21 +269,21 @@ async function loadShiftsForRange() {
 }
 
 async function loadSignoffsForRange() {
-  const { data, error } = await sb
+  const { data, error } = await bySite(sb
     .from('staff_signoffs')
     .select('*')
     .gte('week_start', state.range.start)
-    .lte('week_end', state.range.end);
+    .lte('week_end', state.range.end));
   if (error) { console.error(error); return; }
   state.signoffs = data || [];
 }
 
 async function loadPlanning(weekStartISO, weekEndISO) {
-  const { data, error } = await sb
+  const { data, error } = await bySite(sb
     .from('planning')
     .select('*')
     .gte('business_date', weekStartISO)
-    .lte('business_date', weekEndISO);
+    .lte('business_date', weekEndISO));
   if (error) { console.error(error); return; }
   state.planning = data || [];
 }
@@ -378,10 +424,10 @@ async function renderHours() {
 
   // Planned hours + per-day validations for the range
   const [planRes, valRes] = await Promise.all([
-    sb.from('planning').select('*')
-      .gte('business_date', state.range.start).lte('business_date', state.range.end),
-    sb.from('validations').select('id, shift_ids')
-      .gte('range_start', state.range.start).lte('range_start', state.range.end),
+    bySite(sb.from('planning').select('*')
+      .gte('business_date', state.range.start).lte('business_date', state.range.end)),
+    bySite(sb.from('validations').select('id, shift_ids')
+      .gte('range_start', state.range.start).lte('range_start', state.range.end)),
   ]);
   const rangePlanning = planRes.data || [];
   const validatedShiftIds = new Set();
@@ -602,6 +648,7 @@ async function toggleShiftValidation(shift) {
       shift_ids: [shift.id],
       validated_by: state.managerName || 'manager',
       note: null,
+      etablissement: shift.etablissement || defaultEtab(),
     });
     if (error) { console.error(error); toast('Validation impossible', 'error'); return; }
     toast('Jour validé ✓');
@@ -625,6 +672,7 @@ async function sendForSignature(staffId, weekISO, shifts) {
       employee_name: null,
       has_dispute: false,
       dispute_note: null,
+      etablissement: (state.staff.find(x => x.id === staffId)?.etablissement) || defaultEtab(),
     }, { onConflict: 'staff_id,week_start' });
   if (error) { console.error(error); toast('Envoi impossible', 'error'); return; }
   toast('Envoyé pour signature');
@@ -643,6 +691,7 @@ async function validateMany(shifts) {
     shift_ids: [s.id],
     validated_by: state.managerName || 'manager',
     note: null,
+    etablissement: s.etablissement || defaultEtab(),
   }));
   const { error } = await sb.from('validations').insert(rows);
   if (error) { console.error(error); toast('Validation impossible', 'error'); return; }
@@ -806,10 +855,11 @@ async function saveShift() {
       before_json: state.editing.shift,
       after_json: payload,
       reason: note || null,
+      etablissement: state.editing.shift.etablissement || defaultEtab(),
     });
     res = await sb.from('shifts').update(payload).eq('id', state.editing.shift.id).select().single();
   } else {
-    res = await sb.from('shifts').insert(payload).select().single();
+    res = await sb.from('shifts').insert({ ...payload, etablissement: defaultEtab() }).select().single();
   }
 
   if (res.error) { console.error(res.error); toast('Sauvegarde impossible', 'error'); return; }
@@ -893,6 +943,7 @@ function openStaffModal(staff) {
     $('#staff-contract').value = staff.contract_h ?? 35;
     $('#staff-color').value = staff.color || '#5a8a6b';
     $('#staff-rate').value = staff.hourly_rate ?? '';
+    $('#staff-etab').value = staff.etablissement || defaultEtab();
     $('#staff-active').checked = staff.active;
     $('#staff-delete').classList.remove('hidden');
   } else {
@@ -902,6 +953,7 @@ function openStaffModal(staff) {
     $('#staff-contract').value = 35;
     $('#staff-color').value = '#5a8a6b';
     $('#staff-rate').value = '';
+    $('#staff-etab').value = defaultEtab();
     $('#staff-active').checked = true;
     $('#staff-delete').classList.add('hidden');
   }
@@ -914,12 +966,13 @@ async function saveStaff() {
   const contract = parseFloat($('#staff-contract').value) || 35;
   const color = $('#staff-color').value;
   const rate = parseFloat($('#staff-rate').value) || null;
+  const etablissement = $('#staff-etab').value;
   const active = $('#staff-active').checked;
 
   if (!name) { toast('Nom requis', 'error'); return; }
   if (!/^[0-9]{4}$/.test(pin)) { toast('PIN à 4 chiffres requis', 'error'); return; }
 
-  const payload = { name, pin, contract_h: contract, color, hourly_rate: rate, active };
+  const payload = { name, pin, contract_h: contract, color, hourly_rate: rate, active, etablissement };
 
   let res;
   if (state.editing.staffRow) {
@@ -1110,7 +1163,7 @@ async function savePlan() {
   if (slot.id) {
     res = await sb.from('planning').update(payload).eq('id', slot.id);
   } else {
-    res = await sb.from('planning').insert(payload);
+    res = await sb.from('planning').insert({ ...payload, etablissement: defaultEtab() });
   }
   if (res.error) { console.error(res.error); toast('Sauvegarde impossible', 'error'); return; }
   toast('Créneau enregistré');
@@ -1161,6 +1214,7 @@ async function toggleDayOff(staffId, dateISO) {
     role_label: 'OFF',
     note: null,
     updated_at: new Date().toISOString(),
+    etablissement: defaultEtab(),
   });
   if (error) { console.error(error); toast('Impossible', 'error'); return; }
   toast('Repos marqué');
@@ -1183,6 +1237,7 @@ async function copyPrevWeek() {
     ends_next_day: p.ends_next_day,
     role_label: p.role_label,
     note: p.note,
+    etablissement: p.etablissement || defaultEtab(),
   }));
   const { error: insErr } = await sb.from('planning').insert(newRows);
   if (insErr) { toast('Insertion partielle', 'error'); console.error(insErr); }
@@ -1250,6 +1305,7 @@ async function copyStaffWeekForward(staffId, staffName) {
     role_label: p.role_label,
     pause_minutes: p.pause_minutes,
     note: p.note,
+    etablissement: p.etablissement || defaultEtab(),
   }));
 
   const { error: insErr } = await sb.from('planning').insert(newRows);
@@ -1340,6 +1396,18 @@ function startClockTicker() {
 function wire() {
   // Auth
   $('#btn-logout').addEventListener('click', logout);
+
+  // Site chips — multi-tenant scoping
+  applySite(state.site);   // restore from localStorage on first load
+  $$('.site-chip').forEach(c => c.addEventListener('click', async () => {
+    if (c.dataset.site === state.site) return;
+    applySite(c.dataset.site);
+    // Reload everything for the new scope
+    await loadStaff();
+    await loadLiveShifts();
+    await loadShiftsForRange();
+    showTab(state.activeTab);
+  }));
 
   // Tabs
   $$('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));

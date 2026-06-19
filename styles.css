@@ -1419,3 +1419,92 @@ body {
   }
   .detail-shifts { display: block !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SITE THEMING — site chips switch tokens dynamically via [data-site]
+   data-site="all"        → neutral Tic-Tac-Quack identity (defaults in :root)
+   data-site="tornet"     → alpine paper / blue / wood orange (Tornet)
+   data-site="chez-nous"  → lake at night navy / cream / gold (Chez Nous · Carnet)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── SITE CHIPS (always visible in topbar) ───────────────────────────────── */
+.site-chips {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-right: 0.5rem;
+  padding: 0.2rem;
+  background: var(--ink-3);
+  border: var(--hairline);
+  border-radius: 999px;
+}
+.site-chip {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+  padding: 0.42rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--t1) var(--ease), color var(--t1) var(--ease), border-color var(--t1) var(--ease);
+}
+.site-chip:hover { color: var(--paper); }
+.site-chip.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--moss-soft);
+}
+
+/* Slight squeeze on narrower screens */
+@media (max-width: 980px) {
+  .site-chip { padding: 0.36rem 0.65rem; font-size: 0.66rem; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CHEZ NOUS THEME — lake at night
+   Activated by <body data-site="chez-nous">. Overrides the alpine defaults
+   with the Carnet dark navy / cream / gold palette + Fraunces serif.
+   ════════════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Geist+Mono:wght@400;500;600&display=swap');
+
+body[data-site="chez-nous"] {
+  --ink:        #0a1628;   /* near-black navy, lake at night */
+  --ink-2:      #142339;   /* card surface */
+  --ink-3:      #1d3050;   /* raised surface */
+  --ink-4:      #2a3f5c;   /* hairline */
+  --ink-5:      #1d3050;
+
+  --moss:       #c9913a;   /* gold becomes the primary accent here */
+  --moss-2:     #e0b765;
+  --moss-3:     #5c3f15;
+  --moss-soft:  rgba(201, 145, 58, 0.18);
+
+  --wood:       #d96846;   /* warm orange for service */
+  --wood-2:     #a85033;
+  --wood-soft:  rgba(217, 104, 70, 0.18);
+
+  --hot:        #d96846;
+  --cold:       #5fa580;
+
+  --paper:      #f4ecd8;   /* warm cream, primary text */
+  --paper-2:    #d9cfb8;   /* secondary */
+  --paper-3:    #968d77;   /* muted */
+  --paper-4:    #5c5847;
+
+  --hairline:   1px solid var(--ink-4);
+  --moss-line:  1px solid rgba(201, 145, 58, 0.35);
+
+  --serif:      'Fraunces', Georgia, serif;
+  --sans:       'Inter', system-ui, sans-serif;
+  --mono:       'Geist Mono', 'SF Mono', Menlo, monospace;
+
+  --r:          4px;       /* sharp corners — Carnet identity */
+  --r-l:        8px;
+}
+
+/* The 'all' view stays on the alpine defaults (neutral Tic-Tac-Quack). */
+/* The 'tornet' view = same as :root defaults; no override needed. */

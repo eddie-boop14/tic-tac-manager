@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#2f6cb5">
-  <title>Tornet · Admin</title>
+  <meta name="theme-color" content="#2f6cb5" id="meta-theme-color">
+  <title>Tic-Tac-Quack · Admin</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
   <link rel="manifest" href="manifest.json">
@@ -12,16 +12,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Tornet">
+  <meta name="apple-mobile-web-app-title" content="Tic-Tac-Quack">
 </head>
-<body>
+<body data-site="all">
 
   <!-- ══ AUTH GATE ══ -->
   <section class="auth-gate" id="auth-gate">
     <div class="auth-card">
       <img class="auth-logo" src="logo.jpg" alt="Tic-Tac-Quack Manager">
-      <h1 class="auth-title">Tornet · Admin</h1>
-      <p class="auth-sub">Espace manager</p>
+      <h1 class="auth-title">Tic-Tac-Quack</h1>
+      <p class="auth-sub">Espace manager · les 4</p>
       <input type="password" id="auth-input" placeholder="code manager" autocomplete="off">
       <button class="btn-primary" id="auth-btn">Entrer</button>
       <p class="auth-hint" id="auth-hint"></p>
@@ -36,7 +36,7 @@
       <div class="brand-block">
         <img class="brand-logo" src="logo.jpg" alt="">
         <div>
-          <div class="brand-name">Chalet du Tornet</div>
+          <div class="brand-name" id="brand-name">Tic-Tac-Quack</div>
           <div class="brand-sub">pointage · admin</div>
         </div>
       </div>
@@ -47,6 +47,11 @@
         <button class="tab" data-tab="staff">Staff</button>
       </nav>
       <div class="topbar-end">
+        <nav class="site-chips" id="site-chips" aria-label="Établissement">
+          <button class="site-chip active" data-site="all">Tous</button>
+          <button class="site-chip" data-site="chez-nous">Chez Nous</button>
+          <button class="site-chip" data-site="tornet">Tornet</button>
+        </nav>
         <span class="live-clock" id="live-clock">—</span>
         <button class="btn-icon" id="btn-logout" title="Déconnexion">⏻</button>
       </div>
@@ -275,6 +280,13 @@
             <input type="number" id="staff-rate" min="0" step="0.01" placeholder="12.50">
           </label>
         </div>
+        <label class="field-col">
+          <span class="field-label">Établissement principal</span>
+          <select id="staff-etab">
+            <option value="chez-nous">Chez Nous à la Plage</option>
+            <option value="tornet">Chalet du Tornet</option>
+          </select>
+        </label>
         <label class="field-row">
           <input type="checkbox" id="staff-active" checked>
           <span>Actif (peut pointer)</span>
