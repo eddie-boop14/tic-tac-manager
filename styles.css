@@ -944,6 +944,22 @@ body {
   white-space: nowrap;
 }
 
+.btn-copy-staff {
+  display: block;
+  margin: 6px auto 0;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  background: transparent;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  color: #888;
+  cursor: pointer;
+}
+.btn-copy-staff:hover {
+  border-color: #2f6cb5;
+  color: #2f6cb5;
+}
+
 .cell-actions {
   display: flex;
   gap: 3px;

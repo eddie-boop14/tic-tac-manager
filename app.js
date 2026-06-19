@@ -1018,7 +1018,10 @@ async function renderPlanning() {
       }
       html += '</td>';
     });
-    html += `<td class="plan-week-total">${weekMin > 0 ? fmtDuration(weekMin) : '—'}</td>`;
+    html += `<td class="plan-week-total">
+      ${weekMin > 0 ? fmtDuration(weekMin) : '—'}
+      <button class="btn-copy-staff" type="button" data-staff-id="${staff.id}" data-staff-name="${escapeHTML(staff.name)}" title="Copier vers semaine suivante">→</button>
+    </td>`;
     html += '</tr>';
   });
   html += '</tbody>';
@@ -1039,6 +1042,14 @@ async function renderPlanning() {
       }
       if (td.querySelector('.plan-off-chip')) return;
       openPlanModal(null, td.dataset.staff, td.dataset.date);
+    });
+  });
+
+  // Wire per-staff copy buttons
+  $$('.btn-copy-staff', grid).forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyStaffWeekForward(btn.dataset.staffId, btn.dataset.staffName);
     });
   });
 }
@@ -1176,6 +1187,75 @@ async function copyPrevWeek() {
   const { error: insErr } = await sb.from('planning').insert(newRows);
   if (insErr) { toast('Insertion partielle', 'error'); console.error(insErr); }
   else toast(`${newRows.length} créneaux copiés`);
+  await renderPlanning();
+}
+
+async function copyStaffWeekForward(staffId, staffName) {
+  const curStart = state.planningWeekStart;
+  const curEnd   = isoFromDate(addDays(new Date(curStart), 6));
+  const nextStart = isoFromDate(addDays(new Date(curStart), 7));
+  const nextEnd   = isoFromDate(addDays(new Date(curStart), 13));
+
+  // Load current week slots for this staff
+  const { data, error } = await sb
+    .from('planning')
+    .select('*')
+    .eq('staff_id', staffId)
+    .gte('business_date', curStart)
+    .lte('business_date', curEnd);
+
+  if (error) { toast('Lecture impossible', 'error'); return; }
+  if (!data || data.length === 0) { toast(`Aucun créneau cette semaine pour ${staffName}`); return; }
+
+  // Check if next week already has shifts for this staff
+  const { data: existing } = await sb
+    .from('planning')
+    .select('id')
+    .eq('staff_id', staffId)
+    .gte('business_date', nextStart)
+    .lte('business_date', nextEnd);
+
+  const hasExisting = existing && existing.length > 0;
+
+  let replace = false;
+  if (hasExisting) {
+    const choice = confirm(
+      `Copier ${staffName} → semaine suivante\n\nDes créneaux existent déjà.\n\nOK = Remplacer\nAnnuler = Ajouter`
+    );
+    // OK = true = replace, Cancel = false = add
+    replace = choice;
+    // If they hit cancel on the add option we need a third state — so we use a second confirm
+    if (!choice) {
+      const confirmAdd = confirm(`Ajouter les créneaux par-dessus pour ${staffName} ?`);
+      if (!confirmAdd) return; // user backed out entirely
+    }
+  }
+
+  if (replace) {
+    const { error: delErr } = await sb
+      .from('planning')
+      .delete()
+      .eq('staff_id', staffId)
+      .gte('business_date', nextStart)
+      .lte('business_date', nextEnd);
+    if (delErr) { toast('Suppression impossible', 'error'); console.error(delErr); return; }
+  }
+
+  const newRows = data.map(p => ({
+    staff_id: p.staff_id,
+    business_date: isoFromDate(addDays(new Date(p.business_date), 7)),
+    starts_at: p.starts_at,
+    ends_at: p.ends_at,
+    ends_next_day: p.ends_next_day,
+    role_label: p.role_label,
+    pause_minutes: p.pause_minutes,
+    note: p.note,
+  }));
+
+  const { error: insErr } = await sb.from('planning').insert(newRows);
+  if (insErr) { toast('Insertion impossible', 'error'); console.error(insErr); return; }
+
+  toast(`${staffName} · ${newRows.length} créneaux copiés →`);
   await renderPlanning();
 }
 
