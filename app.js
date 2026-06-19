@@ -74,7 +74,7 @@ function applySite(site) {
   // theme-color meta for status bar
   const themeColor =
     site === 'chez-nous' ? '#0a1628' :
-    site === 'tornet'    ? '#efece4' :
+    site === 'tornet'    ? '#141a17' :
     '#1d2733';
   const meta = $('#meta-theme-color');
   if (meta) meta.setAttribute('content', themeColor);
@@ -517,6 +517,7 @@ async function renderHours() {
       <div class="detail-staff-head">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${g.staff.color};"></span>
         <span class="detail-staff-name">${escapeHTML(g.staff.name)}</span>
+        ${state.site === 'all' ? `<span class="etab-badge etab-${g.staff.etablissement}">${g.staff.etablissement === 'chez-nous' ? 'Chez Nous' : 'Tornet'}</span>` : ''}
         <span class="detail-staff-total">${fmtDuration(g.totalNet)}</span>
         ${pendingAll.length > 0 ? `<button class="bulk-validate all" type="button">Tout valider (${pendingAll.length})</button>` : ''}
         <span class="detail-toggle">›</span>
