@@ -28,11 +28,15 @@ const state = {
   staffFilter: 'all', // 'all' or staff_id
   staffSearch: '',
   staffStatusFilter: 'all', // 'all' | 'active' | 'inactive'
+  hoursPole: 'all',      // 'all' | 'cuisine' | 'salle' | 'snack' — Heures pôle filter
+  hoursSort: 'az',       // 'az' | 'order' — Heures list sort
   planningWeekStart: null,
   planningPole: 'all',   // 'all' | 'cuisine' | 'salle' | 'snack' — planning row filter
   editing: { shift: null, staffRow: null, planSlot: null },
   managerName: localStorage.getItem('ttq.managerName') || '',
   signoffs: [],
+  pendingSignoffs: [],   // all-time pending sign-offs (disputes + awaiting signature), site-scoped
+  _pendingModalKind: 'demands',
 };
 
 // ── SITE FILTER HELPER ─────────────────────────────────────────────────────
@@ -279,6 +283,26 @@ async function loadSignoffsForRange() {
   state.signoffs = data || [];
 }
 
+// All-time pending sign-offs (independent of the period selector), site-scoped:
+// either awaiting the employee's signature, or signed with a dispute to resolve.
+async function loadPendingSignoffs() {
+  const { data, error } = await bySite(sb
+    .from('staff_signoffs')
+    .select('*')
+    .or('employee_signed_at.is.null,has_dispute.eq.true'))
+    .order('week_start', { ascending: false });
+  if (error) { console.error(error); return; }
+  state.pendingSignoffs = data || [];
+}
+
+// Split helpers for the two pending buckets.
+function pendingDemands() {
+  return state.pendingSignoffs.filter(so => so.has_dispute);
+}
+function pendingSignature() {
+  return state.pendingSignoffs.filter(so => !so.employee_signed_at && !so.has_dispute);
+}
+
 async function loadPlanning(weekStartISO, weekEndISO) {
   const { data, error } = await bySite(sb
     .from('planning')
@@ -434,6 +458,8 @@ async function renderHours() {
   const validatedShiftIds = new Set();
   (valRes.data || []).forEach(v => (v.shift_ids || []).forEach(id => validatedShiftIds.add(id)));
   await loadSignoffsForRange();
+  await loadPendingSignoffs();
+  renderPendingBar();
 
   // Apply staff filter
   let shifts = state.shifts;
@@ -451,9 +477,25 @@ async function renderHours() {
     entry.totalNet += m.net;
   });
 
-  // Sort by display order
-  const groups = Array.from(byStaff.values()).sort((a, b) =>
-    (a.staff?.display_order ?? 999) - (b.staff?.display_order ?? 999));
+  // Pôle filter (cuisine / salle / snack) — staff with no pôle drop out of a specific filter.
+  let groupList = Array.from(byStaff.values());
+  if (state.hoursPole !== 'all') {
+    groupList = groupList.filter(g => g.staff?.pole === state.hoursPole);
+  }
+
+  // Sort: A‑Z by name, or by display order.
+  const groups = groupList.sort((a, b) => {
+    if (state.hoursSort === 'az') {
+      return (a.staff?.name || '').localeCompare(b.staff?.name || '', 'fr');
+    }
+    return (a.staff?.display_order ?? 999) - (b.staff?.display_order ?? 999);
+  });
+
+  // Per-staff count of open correction requests (all-time, site-scoped).
+  const disputeCountByStaff = new Map();
+  pendingDemands().forEach(so => {
+    disputeCountByStaff.set(so.staff_id, (disputeCountByStaff.get(so.staff_id) || 0) + 1);
+  });
 
   // Summary cards
   const summary = $('#hours-summary');
@@ -485,10 +527,12 @@ async function renderHours() {
         warn = `<div class="summary-warn">${diff > 0 ? '+' : ''}${fmtDuration(diff)} vs contrat (${expectedH.toFixed(1)}h)</div>`;
       }
 
+      const disputeN = disputeCountByStaff.get(g.staff.id) || 0;
       card.innerHTML = `
         <div class="summary-name">
           <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${g.staff.color};"></span>
           ${escapeHTML(g.staff.name)}
+          ${disputeN > 0 ? `<span class="pending-bubble" title="${disputeN} demande${disputeN > 1 ? 's' : ''} à traiter">${disputeN}</span>` : ''}
         </div>
         <div class="summary-total">${fmtDuration(g.totalNet)}</div>
         <div class="summary-planned">planifié · ${plannedMin > 0 ? fmtDuration(plannedMin) : '—'}</div>
@@ -517,6 +561,7 @@ async function renderHours() {
       <div class="detail-staff-head">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${g.staff.color};"></span>
         <span class="detail-staff-name">${escapeHTML(g.staff.name)}</span>
+        ${(disputeCountByStaff.get(g.staff.id) || 0) > 0 ? `<span class="pending-bubble" title="${disputeCountByStaff.get(g.staff.id)} demande(s) à traiter">${disputeCountByStaff.get(g.staff.id)}</span>` : ''}
         ${state.site === 'all' ? `<span class="etab-badge etab-${g.staff.etablissement}">${g.staff.etablissement === 'chez-nous' ? 'Chez Nous' : 'Tornet'}</span>` : ''}
         <span class="detail-staff-total">${fmtDuration(g.totalNet)}</span>
         ${pendingAll.length > 0 ? `<button class="bulk-validate all" type="button">Tout valider (${pendingAll.length})</button>` : ''}
@@ -615,6 +660,86 @@ async function renderHours() {
       wrap.classList.toggle('open');
     });
     detail.appendChild(wrap);
+  });
+}
+
+// ── PENDING (demandes + à signer) ────────────────────────────────────────────
+function renderPendingBar() {
+  const demands = pendingDemands().length;
+  const toSign = pendingSignature().length;
+
+  const dBubble = $('#pending-demands-bubble');
+  const dPill = $('#pending-demands');
+  if (dBubble && dPill) {
+    dBubble.textContent = demands;
+    dPill.classList.toggle('has', demands > 0);
+    dPill.classList.toggle('muted', demands === 0);
+  }
+  const sCount = $('#pending-signature-count');
+  const sPill = $('#pending-signature');
+  if (sCount && sPill) {
+    sCount.textContent = toSign;
+    sPill.classList.toggle('muted', toSign === 0);
+  }
+}
+
+function openPendingModal(kind) {
+  state._pendingModalKind = kind;
+  $$('.pending-tab').forEach(t => t.classList.toggle('active', t.dataset.pending === kind));
+  $('#pending-modal-title').textContent =
+    kind === 'demands' ? 'Demandes à traiter' : 'En attente de signature';
+  renderPendingList();
+  $('#pending-modal').classList.remove('hidden');
+}
+
+function renderPendingList() {
+  const kind = state._pendingModalKind;
+  const list = $('#pending-list');
+  const items = kind === 'demands' ? pendingDemands() : pendingSignature();
+
+  if (items.length === 0) {
+    list.innerHTML = `<div class="empty">${kind === 'demands' ? 'aucune demande à traiter' : 'rien en attente de signature'}</div>`;
+    return;
+  }
+
+  list.innerHTML = '';
+  items.forEach(so => {
+    const staff = state.staff.find(s => s.id === so.staff_id);
+    const name = staff?.name || so.employee_name || '—';
+    const row = document.createElement('div');
+    row.className = 'pending-item' + (kind === 'demands' ? ' dispute' : '');
+    const meta = kind === 'demands'
+      ? `<div class="pending-item-note">${escapeHTML(so.dispute_note || 'Correction demandée, sans note')}</div>`
+      : `<div class="pending-item-sub">envoyé le ${so.sent_at ? new Date(so.sent_at).toLocaleDateString('fr-FR') : '—'}</div>`;
+    row.innerHTML = `
+      <div class="pending-item-main">
+        <div class="pending-item-name">
+          ${escapeHTML(name)}
+          ${state.site === 'all' && staff ? `<span class="etab-badge etab-${staff.etablissement}">${staff.etablissement === 'chez-nous' ? 'Chez Nous' : 'Tornet'}</span>` : ''}
+        </div>
+        <div class="pending-item-week">${weekRangeLabel(so.week_start)}</div>
+        ${meta}
+      </div>
+      <button class="btn-mini pending-open" type="button">Ouvrir →</button>
+    `;
+    row.querySelector('.pending-open').addEventListener('click', () => jumpToSignoff(so));
+    list.appendChild(row);
+  });
+}
+
+// Jump the Heures view to a specific staff member + the week of a sign-off,
+// so the manager can act on it inline with the live shifts.
+function jumpToSignoff(so) {
+  closeModal('#pending-modal');
+  state.staffFilter = so.staff_id;
+  state.hoursPole = 'all';
+  state.range = { start: so.week_start, end: so.week_end, kind: 'custom' };
+  // Sync the controls UI.
+  $$('#hours-pole-filter .pole-btn').forEach(b => b.classList.toggle('active', b.dataset.pole === 'all'));
+  $$('.range-chips .chip').forEach(c => c.classList.remove('active'));
+  renderHours().then(() => {
+    const wrap = $('#hours-detail .detail-staff');
+    if (wrap) wrap.classList.add('open');
   });
 }
 
@@ -1470,6 +1595,23 @@ function wire() {
 
   $('#hours-print').addEventListener('click', printHours);
   $('#hours-csv').addEventListener('click', exportCSV);
+
+  // Heures — pôle filter
+  $$('#hours-pole-filter .pole-btn').forEach(btn => btn.addEventListener('click', () => {
+    state.hoursPole = btn.dataset.pole;
+    $$('#hours-pole-filter .pole-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderHours();
+  }));
+  // Heures — A‑Z / default sort
+  $$('#hours-sort .pole-btn').forEach(btn => btn.addEventListener('click', () => {
+    state.hoursSort = btn.dataset.sort;
+    $$('#hours-sort .pole-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderHours();
+  }));
+  // Pending pills → modal
+  $('#pending-demands').addEventListener('click', () => openPendingModal('demands'));
+  $('#pending-signature').addEventListener('click', () => openPendingModal('signature'));
+  $$('.pending-tab').forEach(t => t.addEventListener('click', () => openPendingModal(t.dataset.pending)));
 
   // Planning
   $('#plan-prev').addEventListener('click', () => {

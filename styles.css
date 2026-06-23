@@ -1564,6 +1564,124 @@ body[data-site="chez-nous"] {
 .etab-badge.etab-chez-nous { color: #c9913a; }   /* Chez Nous gold */
 .etab-badge.etab-tornet    { color: #5a8a6b; }   /* Tornet moss */
 
+/* ── PENDING (demandes + à signer) ──────────────────────────────────────────── */
+/* Small red notification bubble, used on the staff name/row and the demands pill. */
+.pending-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--hot);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.pending-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 14px;
+  flex-wrap: wrap;
+}
+.pending-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: var(--hairline);
+  background: var(--ink-2);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--t1) var(--ease), background var(--t1) var(--ease), opacity var(--t1) var(--ease);
+}
+.pending-pill:hover { border-color: var(--moss); }
+.pending-pill.demands.has {
+  border-color: var(--hot);
+  background: #fde8e8;
+  color: #8b1a1a;
+}
+.pending-pill.muted { opacity: 0.6; }
+.pending-count {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--moss-2);
+}
+
+/* Pending modal list */
+.pending-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.pending-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: var(--hairline);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--paper-3);
+  font-family: var(--serif);
+  font-size: 14px;
+  cursor: pointer;
+}
+.pending-tab.active {
+  background: var(--moss-soft);
+  color: var(--moss-2);
+  border-color: var(--moss);
+  font-style: italic;
+}
+.pending-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.pending-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: var(--hairline);
+  border-radius: var(--r);
+  background: var(--ink-2);
+}
+.pending-item.dispute { border-left: 3px solid var(--hot); }
+.pending-item-main { flex: 1; min-width: 0; }
+.pending-item-name {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pending-item-week {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--paper-3);
+  margin-top: 2px;
+}
+.pending-item-note {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: #8b1a1a;
+  margin-top: 4px;
+}
+.pending-item-sub {
+  font-size: 0.72rem;
+  color: var(--paper-3);
+  margin-top: 4px;
+}
+.pending-open { white-space: nowrap; flex-shrink: 0; }
+
 /* ════════════════════════════════════════════════════════════════════════════
    TORNET THEME — dark alpine, echoes the Tornet kiosk (moss / forest / wood).
    Activated by <body data-site="tornet">. 'Tous' keeps the neutral defaults.

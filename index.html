@@ -125,10 +125,38 @@
           </div>
         </div>
 
+        <div class="control-group">
+          <label class="control-label">pôle</label>
+          <div class="pole-filter" id="hours-pole-filter">
+            <button class="pole-btn active" data-pole="all">Tous</button>
+            <button class="pole-btn" data-pole="cuisine">Cuisine</button>
+            <button class="pole-btn" data-pole="salle">Salle</button>
+            <button class="pole-btn" data-pole="snack">Snack</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label class="control-label">tri</label>
+          <div class="pole-filter" id="hours-sort">
+            <button class="pole-btn active" data-sort="az">A‑Z</button>
+            <button class="pole-btn" data-sort="order">Défaut</button>
+          </div>
+        </div>
+
         <div class="control-group control-actions">
           <button class="btn-mini" id="hours-print">🖨 Imprimer feuilles</button>
           <button class="btn-mini" id="hours-csv">⬇ Export CSV</button>
         </div>
+      </div>
+
+      <div class="pending-bar" id="pending-bar">
+        <button class="pending-pill demands" id="pending-demands" type="button">
+          <span class="pending-bubble" id="pending-demands-bubble">0</span>
+          Demandes à traiter
+        </button>
+        <button class="pending-pill signature" id="pending-signature" type="button">
+          À signer · <span class="pending-count" id="pending-signature-count">0</span>
+        </button>
       </div>
 
       <div class="hours-summary" id="hours-summary">
@@ -202,6 +230,23 @@
   <!-- ══ MODALS ══ -->
 
   <!-- Shift edit modal -->
+  <div class="modal hidden" id="pending-modal">
+    <div class="modal-backdrop" data-close="pending"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <button class="modal-close" data-close="pending">✕</button>
+        <h2 class="modal-title" id="pending-modal-title">En attente</h2>
+      </header>
+      <div class="modal-body">
+        <div class="pending-tabs">
+          <button class="pending-tab active" data-pending="demands" type="button">Demandes à traiter</button>
+          <button class="pending-tab" data-pending="signature" type="button">À signer</button>
+        </div>
+        <div class="pending-list" id="pending-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal hidden" id="shift-modal">
     <div class="modal-backdrop" data-close="shift"></div>
     <div class="modal-card">
