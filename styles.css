@@ -1803,34 +1803,3 @@ body[data-site="chez-nous"] {
   margin-top: 12px;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   TORNET THEME — dark alpine, echoes the Tornet kiosk (moss / forest / wood).
-   Activated by <body data-site="tornet">. 'Tous' keeps the neutral defaults.
-   ════════════════════════════════════════════════════════════════════════════ */
-body[data-site="tornet"] {
-  --ink:        #141a17;   /* near-black forest */
-  --ink-2:      #1c2420;   /* card surface */
-  --ink-3:      #283130;   /* raised surface */
-  --ink-4:      #38423f;   /* hairline */
-  --ink-5:      #283130;
-
-  --moss:       #5a8a6b;   /* alpine green, primary accent */
-  --moss-2:     #79a585;
-  --moss-3:     #3d6d50;
-  --moss-soft:  rgba(90, 138, 107, 0.18);
-
-  --wood:       #c2885a;   /* warm wood orange for service */
-  --wood-2:     #a06a3e;
-  --wood-soft:  rgba(194, 136, 90, 0.18);
-
-  --hot:        #c25a4a;
-  --cold:       #5a85a8;
-
-  --paper:      #e8ecdf;   /* warm off-white, primary text */
-  --paper-2:    #d4dac8;   /* secondary */
-  --paper-3:    #8b9286;   /* muted */
-  --paper-4:    #5c5847;
-
-  --hairline:   1px solid var(--ink-4);
-  --moss-line:  1px solid rgba(90, 138, 107, 0.35);
-}

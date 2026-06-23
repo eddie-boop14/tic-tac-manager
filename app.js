@@ -75,10 +75,9 @@ function applySite(site) {
       'Tic-Tac-Quack';
   }
 
-  // theme-color meta for status bar
+  // theme-color meta for status bar. Tornet uses the neutral default (same as Tous).
   const themeColor =
     site === 'chez-nous' ? '#0a1628' :
-    site === 'tornet'    ? '#141a17' :
     '#1d2733';
   const meta = $('#meta-theme-color');
   if (meta) meta.setAttribute('content', themeColor);
