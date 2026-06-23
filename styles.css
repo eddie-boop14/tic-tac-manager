@@ -1702,6 +1702,107 @@ body[data-site="chez-nous"] {
 }
 .pending-open { white-space: nowrap; flex-shrink: 0; }
 
+/* ── CONGÉS (CP / CM) in Heures ─────────────────────────────────────────────── */
+.summary-leave { font-size: 0.74rem; color: var(--paper-3); margin-top: 2px; }
+.lv { font-family: var(--mono); font-weight: 600; }
+.lv.cp { color: var(--moss-2); }
+.lv.cm { color: #8b1a1a; }
+
+.leave-section {
+  border-top: 1px dashed rgba(47, 108, 181, 0.18);
+  padding: 10px 16px 12px;
+}
+.leave-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.leave-head-label {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+}
+.leave-add {
+  background: transparent;
+  border: 1px dashed rgba(47, 108, 181, 0.4);
+  border-radius: 999px;
+  color: var(--moss-2);
+  font-size: 0.72rem;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+.leave-add:hover { border-color: var(--moss); border-style: solid; }
+.leave-list { display: flex; flex-direction: column; gap: 6px; }
+.leave-empty { font-style: italic; color: var(--paper-3); font-size: 0.78rem; }
+.leave-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--r);
+  background: var(--ink-2);
+  border: var(--hairline);
+}
+.leave-entry.cp { border-left: 3px solid var(--moss); }
+.leave-entry.cm { border-left: 3px solid var(--hot); }
+.leave-tag {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.7rem;
+  min-width: 26px;
+}
+.leave-entry.cp .leave-tag { color: var(--moss-2); }
+.leave-entry.cm .leave-tag { color: #8b1a1a; }
+.leave-date { font-family: var(--mono); font-size: 0.74rem; color: var(--paper-2); }
+.leave-hours { flex: 1; font-family: var(--mono); font-size: 0.78rem; font-weight: 600; color: var(--paper); }
+.leave-edit {
+  background: transparent; border: none; color: var(--moss-2);
+  font-size: 0.72rem; cursor: pointer; text-decoration: underline;
+}
+.leave-del {
+  background: transparent; border: none; color: var(--paper-3);
+  font-size: 0.85rem; cursor: pointer; line-height: 1;
+}
+.leave-del:hover { color: var(--hot); }
+
+/* Leave modal type picker */
+.leave-modal-context {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--paper);
+  margin-bottom: 12px;
+}
+.leave-type-picker { display: flex; gap: 6px; }
+.leave-type-opt {
+  flex: 1;
+  padding: 9px 8px;
+  border: var(--hairline);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--paper-3);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.leave-type-opt.active {
+  background: var(--moss-soft);
+  color: var(--moss-2);
+  border-color: var(--moss);
+}
+.leave-modal-hint {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--paper-3);
+  margin-top: 12px;
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    TORNET THEME — dark alpine, echoes the Tornet kiosk (moss / forest / wood).
    Activated by <body data-site="tornet">. 'Tous' keeps the neutral defaults.

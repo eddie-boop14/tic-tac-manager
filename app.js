@@ -469,12 +469,31 @@ async function renderHours() {
 
   // Group by staff
   const byStaff = new Map();
+  const ensureGroup = (staffId) => {
+    if (!byStaff.has(staffId)) {
+      byStaff.set(staffId, { staff: state.staff.find(x => x.id === staffId), shifts: [], totalNet: 0, leave: [] });
+    }
+    return byStaff.get(staffId);
+  };
   shifts.forEach(s => {
-    if (!byStaff.has(s.staff_id)) byStaff.set(s.staff_id, { staff: state.staff.find(x => x.id === s.staff_id), shifts: [], totalNet: 0 });
     const m = computeShiftMinutes(s);
-    const entry = byStaff.get(s.staff_id);
+    const entry = ensureGroup(s.staff_id);
     entry.shifts.push({ ...s, _net: m.net, _pause: m.pause, _total: m.total });
     entry.totalNet += m.net;
+  });
+
+  // Fold in CP/CM leave days (shared with the planning tab). Staff with only
+  // leave and no worked shifts still appear.
+  let leaveList = rangePlanning.filter(isLeaveSlot);
+  if (state.staffFilter !== 'all') leaveList = leaveList.filter(p => p.staff_id === state.staffFilter);
+  leaveList.forEach(p => ensureGroup(p.staff_id).leave.push(p));
+
+  // Per-group leave sums. CP credits paid hours; CM is tracked separately.
+  byStaff.forEach(g => {
+    g.cpMin = g.leave.filter(p => offSlotInfo(p).type === 'CP').reduce((s, p) => s + leaveMinutes(p), 0);
+    g.cmMin = g.leave.filter(p => offSlotInfo(p).type === 'CM').reduce((s, p) => s + leaveMinutes(p), 0);
+    g.paidTotal = g.totalNet + g.cpMin;
+    g.leave.sort((a, b) => a.business_date.localeCompare(b.business_date));
   });
 
   // Pôle filter (cuisine / salle / snack) — staff with no pôle drop out of a specific filter.
@@ -520,12 +539,16 @@ async function renderHours() {
       const weeks_in_range = days_in_range / 7;
       const expectedH = (g.staff.contract_h || 35) * weeks_in_range;
       const expectedMin = expectedH * 60;
-      const diff = g.totalNet - expectedMin;
+      const diff = g.paidTotal - expectedMin;
 
       let warn = '';
       if (Math.abs(diff) > 60) {
         warn = `<div class="summary-warn">${diff > 0 ? '+' : ''}${fmtDuration(diff)} vs contrat (${expectedH.toFixed(1)}h)</div>`;
       }
+
+      const leaveLine = (g.cpMin > 0 || g.cmMin > 0)
+        ? `<div class="summary-leave">travaillé ${fmtDuration(g.totalNet)}${g.cpMin > 0 ? ` · <span class="lv cp">CP ${fmtDuration(g.cpMin)}</span>` : ''}${g.cmMin > 0 ? ` · <span class="lv cm">CM ${fmtDuration(g.cmMin)}</span>` : ''}</div>`
+        : '';
 
       const disputeN = disputeCountByStaff.get(g.staff.id) || 0;
       card.innerHTML = `
@@ -534,7 +557,8 @@ async function renderHours() {
           ${escapeHTML(g.staff.name)}
           ${disputeN > 0 ? `<span class="pending-bubble" title="${disputeN} demande${disputeN > 1 ? 's' : ''} à traiter">${disputeN}</span>` : ''}
         </div>
-        <div class="summary-total">${fmtDuration(g.totalNet)}</div>
+        <div class="summary-total">${fmtDuration(g.paidTotal)}</div>
+        ${leaveLine}
         <div class="summary-planned">planifié · ${plannedMin > 0 ? fmtDuration(plannedMin) : '—'}</div>
         <div class="summary-detail">
           ${g.shifts.length} services · ${days} jours · ${fmtDuration(avg)}/jour moyen
@@ -563,7 +587,7 @@ async function renderHours() {
         <span class="detail-staff-name">${escapeHTML(g.staff.name)}</span>
         ${(disputeCountByStaff.get(g.staff.id) || 0) > 0 ? `<span class="pending-bubble" title="${disputeCountByStaff.get(g.staff.id)} demande(s) à traiter">${disputeCountByStaff.get(g.staff.id)}</span>` : ''}
         ${state.site === 'all' ? `<span class="etab-badge etab-${g.staff.etablissement}">${g.staff.etablissement === 'chez-nous' ? 'Chez Nous' : 'Tornet'}</span>` : ''}
-        <span class="detail-staff-total">${fmtDuration(g.totalNet)}</span>
+        <span class="detail-staff-total">${fmtDuration(g.paidTotal)}${g.cpMin > 0 ? `<span class="lv cp"> (dont CP ${fmtDuration(g.cpMin)})</span>` : ''}</span>
         ${pendingAll.length > 0 ? `<button class="bulk-validate all" type="button">Tout valider (${pendingAll.length})</button>` : ''}
         <span class="detail-toggle">›</span>
       </div>
@@ -576,6 +600,37 @@ async function renderHours() {
       });
     }
     const shiftsWrap = wrap.querySelector('.detail-shifts');
+
+    // ── Congés (CP / CM) — add / modify / remove on specific days ──
+    const leaveSection = document.createElement('div');
+    leaveSection.className = 'leave-section';
+    const leaveRows = g.leave.map(p => {
+      const info = offSlotInfo(p);
+      return `<div class="leave-entry ${info.cls}" data-plan="${p.id}">
+        <span class="leave-tag">${info.label}</span>
+        <span class="leave-date">${fmtDateShort(new Date(p.business_date))}</span>
+        <span class="leave-hours">${fmtDuration(leaveMinutes(p))}</span>
+        <button class="leave-edit" type="button" title="Modifier">modifier</button>
+        <button class="leave-del" type="button" title="Supprimer">✕</button>
+      </div>`;
+    }).join('');
+    leaveSection.innerHTML = `
+      <div class="leave-head">
+        <span class="leave-head-label">Congés</span>
+        <button class="leave-add" type="button">＋ CP / CM</button>
+      </div>
+      <div class="leave-list">${leaveRows || '<span class="leave-empty">aucun congé sur la période</span>'}</div>
+    `;
+    leaveSection.querySelector('.leave-add').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLeaveModal(g.staff.id, null, null);
+    });
+    leaveSection.querySelectorAll('.leave-entry').forEach(row => {
+      const slot = g.leave.find(p => p.id === row.dataset.plan);
+      row.querySelector('.leave-edit').addEventListener('click', (e) => { e.stopPropagation(); openLeaveModal(g.staff.id, slot.business_date, slot); });
+      row.querySelector('.leave-del').addEventListener('click', (e) => { e.stopPropagation(); removeLeave(slot.id); });
+    });
+    shiftsWrap.appendChild(leaveSection);
 
     const weeks = new Map();
     const weekOrder = [];
@@ -1191,7 +1246,8 @@ async function renderPlanning() {
       html += `<td data-staff="${staff.id}" data-date="${iso}">`;
       if (offSlot) {
         const info = offSlotInfo(offSlot);
-        html += `<div class="plan-off-chip ${info.cls}" data-plan="${offSlot.id}">${info.label}</div>`;
+        const hrs = info.type !== 'OFF' && leaveMinutes(offSlot) > 0 ? ` · ${fmtDuration(leaveMinutes(offSlot))}` : '';
+        html += `<div class="plan-off-chip ${info.cls}" data-plan="${offSlot.id}">${info.label}${hrs}</div>`;
       } else {
         let cellMin = 0;
         cellSlots.forEach(slot => {
@@ -1270,6 +1326,22 @@ function offSlotInfo(p) {
 
 function dayMarkerLabel(type) {
   return type === 'CP' ? 'Congé payé' : type === 'CM' ? 'Congé maladie' : 'Repos';
+}
+
+// A "leave" slot is a CP/CM day marker. It carries its credited minutes in
+// pause_minutes (reused — a zero-duration slot has no real pause), so the
+// amount of paid hours per leave day is adjustable. Shared with the planning tab.
+function isLeaveSlot(p) {
+  return isOffSlot(p) && ['CP', 'CM'].includes((p.role_label || '').toUpperCase());
+}
+function leaveMinutes(p) {
+  return p.pause_minutes || 0;
+}
+// Default credited minutes for a new leave day, from the staff's weekly contract
+// spread over a 5-day week (e.g. 35h → 7h, 39h → 7h48).
+function defaultLeaveMinutes(staffId) {
+  const s = state.staff.find(x => x.id === staffId);
+  return Math.round(((s?.contract_h || 35) / 5) * 60);
 }
 
 function monthShort(d) {
@@ -1357,8 +1429,11 @@ async function setDayMarker(staffId, dateISO, type) {
       if (error) { console.error(error); toast('Impossible', 'error'); return; }
       toast(`${label} retiré`);
     } else {
+      // Switching kind: Repos has no credited hours; CP/CM keep existing minutes
+      // or get the default daily amount when coming from Repos.
+      const newPause = type === 'OFF' ? 0 : (offSlot.pause_minutes || defaultLeaveMinutes(staffId));
       const { error } = await sb.from('planning')
-        .update({ role_label: type, updated_at: new Date().toISOString() })
+        .update({ role_label: type, pause_minutes: newPause, updated_at: new Date().toISOString() })
         .eq('id', offSlot.id);
       if (error) { console.error(error); toast('Impossible', 'error'); return; }
       toast(`${label} marqué`);
@@ -1383,6 +1458,7 @@ async function setDayMarker(staffId, dateISO, type) {
     ends_at: '00:00:00',
     ends_next_day: false,
     role_label: type,
+    pause_minutes: type === 'OFF' ? 0 : defaultLeaveMinutes(staffId),
     note: null,
     updated_at: new Date().toISOString(),
     etablissement: defaultEtab(),
@@ -1403,6 +1479,88 @@ async function clearDayMarker(staffId, dateISO) {
   if (error) { console.error(error); toast('Impossible', 'error'); return; }
   toast(`${label} retiré`);
   await renderPlanning();
+}
+
+// ── LEAVE MODAL (CP / CM from the Heures tab) ─────────────────────────────────
+function setLeaveType(type) {
+  const picker = $('#leave-type');
+  picker.dataset.type = type;
+  picker.querySelectorAll('.leave-type-opt').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+}
+
+function openLeaveModal(staffId, dateISO, existing) {
+  const staff = state.staff.find(s => s.id === staffId);
+  state.editing.leave = { staffId, planId: existing?.id || null };
+  $('#leave-context').textContent = staff ? staff.name : '—';
+  $('#leave-date').value = dateISO || todayISO();
+  setLeaveType(existing ? offSlotInfo(existing).type : 'CP');
+  const mins = existing ? leaveMinutes(existing) : defaultLeaveMinutes(staffId);
+  $('#leave-hours').value = (mins / 60).toFixed(2).replace(/\.?0+$/, '');
+  $('#leave-delete').classList.toggle('hidden', !existing);
+  $('#leave-modal').classList.remove('hidden');
+}
+
+async function saveLeave() {
+  const ed = state.editing.leave;
+  if (!ed) return;
+  const date = $('#leave-date').value;
+  const type = $('#leave-type').dataset.type || 'CP';
+  const hours = parseFloat($('#leave-hours').value);
+  if (!date) { toast('Date requise', 'error'); return; }
+  if (isNaN(hours) || hours < 0) { toast('Heures invalides', 'error'); return; }
+  const minutes = Math.round(hours * 60);
+  const staff = state.staff.find(s => s.id === ed.staffId);
+
+  const payload = {
+    business_date: date,
+    starts_at: '00:00:00',
+    ends_at: '00:00:00',
+    ends_next_day: false,
+    role_label: type,
+    pause_minutes: minutes,
+    note: null,
+    updated_at: new Date().toISOString(),
+  };
+
+  let error;
+  if (ed.planId) {
+    ({ error } = await sb.from('planning').update(payload).eq('id', ed.planId));
+  } else {
+    // Avoid a duplicate leave/off slot on the same day — update it if present.
+    const { data: existing } = await sb.from('planning')
+      .select('id, starts_at, ends_at')
+      .eq('staff_id', ed.staffId).eq('business_date', date);
+    const off = (existing || []).find(p => p.starts_at === p.ends_at);
+    if (off) {
+      ({ error } = await sb.from('planning').update(payload).eq('id', off.id));
+    } else {
+      ({ error } = await sb.from('planning').insert({
+        ...payload, staff_id: ed.staffId,
+        etablissement: staff?.etablissement || defaultEtab(),
+      }));
+    }
+  }
+  if (error) { console.error(error); toast('Enregistrement impossible', 'error'); return; }
+  toast('Congé enregistré');
+  closeModal('#leave-modal');
+  await renderHours();
+}
+
+async function deleteLeave() {
+  const ed = state.editing.leave;
+  if (!ed?.planId) { closeModal('#leave-modal'); return; }
+  const { error } = await sb.from('planning').delete().eq('id', ed.planId);
+  if (error) { console.error(error); toast('Suppression impossible', 'error'); return; }
+  toast('Congé supprimé');
+  closeModal('#leave-modal');
+  await renderHours();
+}
+
+async function removeLeave(planId) {
+  const { error } = await sb.from('planning').delete().eq('id', planId);
+  if (error) { console.error(error); toast('Suppression impossible', 'error'); return; }
+  toast('Congé supprimé');
+  await renderHours();
 }
 
 async function copyPrevWeek() {
@@ -1655,6 +1813,11 @@ function wire() {
   $('#pending-demands').addEventListener('click', () => openPendingModal('demands'));
   $('#pending-signature').addEventListener('click', () => openPendingModal('signature'));
   $$('.pending-tab').forEach(t => t.addEventListener('click', () => openPendingModal(t.dataset.pending)));
+
+  // Leave (CP/CM) modal
+  $$('#leave-type .leave-type-opt').forEach(b => b.addEventListener('click', () => setLeaveType(b.dataset.type)));
+  $('#leave-save').addEventListener('click', saveLeave);
+  $('#leave-delete').addEventListener('click', deleteLeave);
 
   // Planning
   $('#plan-prev').addEventListener('click', () => {
