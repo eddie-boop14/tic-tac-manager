@@ -966,7 +966,7 @@ body {
   padding: 2px;
 }
 
-.plan-add, .plan-off {
+.plan-add, .plan-off, .plan-cp, .plan-cm {
   flex: 1;
   padding: 3px 4px;
   background: transparent;
@@ -981,13 +981,19 @@ body {
 }
 
 .planning-grid tbody td:hover .plan-add,
-.planning-grid tbody td:hover .plan-off { opacity: 1; }
+.planning-grid tbody td:hover .plan-off,
+.planning-grid tbody td:hover .plan-cp,
+.planning-grid tbody td:hover .plan-cm { opacity: 1; }
 
 .plan-add:hover { color: var(--moss-2); border-color: var(--moss); }
 .plan-off {
   border-color: rgba(224, 138, 46, 0.35);
 }
 .plan-off:hover { color: var(--wood-2); border-color: var(--wood); }
+.plan-cp { border-color: rgba(47, 108, 181, 0.35); }
+.plan-cp:hover { color: var(--moss-2); border-color: var(--moss); }
+.plan-cm { border-color: rgba(189, 59, 45, 0.35); }
+.plan-cm:hover { color: var(--hot); border-color: var(--hot); }
 
 .plan-off-chip {
   margin: 2px;
@@ -1002,6 +1008,20 @@ body {
   cursor: pointer;
 }
 .plan-off-chip:hover { color: var(--paper-2); }
+
+/* Leave-day chips — CP (congé payé, blue) / CM (congé maladie, red). */
+.plan-off-chip.cp {
+  background: rgba(47, 108, 181, 0.14);
+  color: var(--moss-3);
+  font-style: normal;
+  font-weight: 600;
+}
+.plan-off-chip.cm {
+  background: rgba(189, 59, 45, 0.14);
+  color: #8b1a1a;
+  font-style: normal;
+  font-weight: 600;
+}
 
 .planning-hint {
   margin-top: 12px;

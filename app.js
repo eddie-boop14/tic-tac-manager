@@ -1190,7 +1190,8 @@ async function renderPlanning() {
       const offSlot = cellSlots.find(isOffSlot);
       html += `<td data-staff="${staff.id}" data-date="${iso}">`;
       if (offSlot) {
-        html += `<div class="plan-off-chip" data-plan="${offSlot.id}">Repos</div>`;
+        const info = offSlotInfo(offSlot);
+        html += `<div class="plan-off-chip ${info.cls}" data-plan="${offSlot.id}">${info.label}</div>`;
       } else {
         let cellMin = 0;
         cellSlots.forEach(slot => {
@@ -1208,6 +1209,8 @@ async function renderPlanning() {
         html += `<div class="cell-actions">
           <button class="plan-add" type="button">+ créneau</button>
           <button class="plan-off" type="button">Repos</button>
+          <button class="plan-cp" type="button">CP</button>
+          <button class="plan-cm" type="button">CM</button>
         </div>`;
       }
       html += '</td>';
@@ -1230,10 +1233,13 @@ async function renderPlanning() {
         if (slot) openPlanModal(slot, td.dataset.staff, td.dataset.date);
         return;
       }
-      if (e.target.closest('.plan-off') || e.target.closest('.plan-off-chip')) {
-        toggleDayOff(td.dataset.staff, td.dataset.date);
+      if (e.target.closest('.plan-off-chip')) {
+        clearDayMarker(td.dataset.staff, td.dataset.date);
         return;
       }
+      if (e.target.closest('.plan-off')) { setDayMarker(td.dataset.staff, td.dataset.date, 'OFF'); return; }
+      if (e.target.closest('.plan-cp'))  { setDayMarker(td.dataset.staff, td.dataset.date, 'CP');  return; }
+      if (e.target.closest('.plan-cm'))  { setDayMarker(td.dataset.staff, td.dataset.date, 'CM');  return; }
       if (td.querySelector('.plan-off-chip')) return;
       openPlanModal(null, td.dataset.staff, td.dataset.date);
     });
@@ -1248,9 +1254,22 @@ async function renderPlanning() {
   });
 }
 
-// An "off"/rest day is stored as a planning row with equal start and end times.
+// An "off"/leave day is stored as a planning row with equal start and end times.
+// The kind (Repos / CP / CM) lives in role_label.
 function isOffSlot(p) {
   return p.starts_at === p.ends_at;
+}
+
+// Display info for a zero-duration day marker, derived from role_label.
+function offSlotInfo(p) {
+  const t = (p.role_label || 'OFF').toUpperCase();
+  if (t === 'CP') return { type: 'CP', label: 'CP', cls: 'cp' };
+  if (t === 'CM') return { type: 'CM', label: 'CM', cls: 'cm' };
+  return { type: 'OFF', label: 'Repos', cls: 'off' };
+}
+
+function dayMarkerLabel(type) {
+  return type === 'CP' ? 'Congé payé' : type === 'CM' ? 'Congé maladie' : 'Repos';
 }
 
 function monthShort(d) {
@@ -1323,23 +1342,34 @@ async function deletePlan() {
   await renderPlanning();
 }
 
-async function toggleDayOff(staffId, dateISO) {
+// Set (or toggle/switch) a whole-day marker — Repos / CP / CM — on a cell.
+// Clicking the same type again clears it; a different type switches it.
+async function setDayMarker(staffId, dateISO, type) {
+  const label = dayMarkerLabel(type);
   const cellSlots = state.planning.filter(
     p => p.staff_id === staffId && p.business_date === dateISO
   );
   const offSlot = cellSlots.find(isOffSlot);
 
   if (offSlot) {
-    const { error } = await sb.from('planning').delete().eq('id', offSlot.id);
-    if (error) { console.error(error); toast('Impossible', 'error'); return; }
-    toast('Repos retiré');
+    if (offSlotInfo(offSlot).type === type) {
+      const { error } = await sb.from('planning').delete().eq('id', offSlot.id);
+      if (error) { console.error(error); toast('Impossible', 'error'); return; }
+      toast(`${label} retiré`);
+    } else {
+      const { error } = await sb.from('planning')
+        .update({ role_label: type, updated_at: new Date().toISOString() })
+        .eq('id', offSlot.id);
+      if (error) { console.error(error); toast('Impossible', 'error'); return; }
+      toast(`${label} marqué`);
+    }
     await renderPlanning();
     return;
   }
 
   const creneaux = cellSlots.filter(p => !isOffSlot(p));
   if (creneaux.length &&
-      !confirm('Marquer repos ? Les créneaux du jour seront supprimés.')) return;
+      !confirm(`Marquer ${label} ? Les créneaux du jour seront supprimés.`)) return;
 
   if (creneaux.length) {
     const { error } = await sb.from('planning').delete().in('id', creneaux.map(p => p.id));
@@ -1352,13 +1382,26 @@ async function toggleDayOff(staffId, dateISO) {
     starts_at: '00:00:00',
     ends_at: '00:00:00',
     ends_next_day: false,
-    role_label: 'OFF',
+    role_label: type,
     note: null,
     updated_at: new Date().toISOString(),
     etablissement: defaultEtab(),
   });
   if (error) { console.error(error); toast('Impossible', 'error'); return; }
-  toast('Repos marqué');
+  toast(`${label} marqué`);
+  await renderPlanning();
+}
+
+// Clicking an existing day-marker chip clears it.
+async function clearDayMarker(staffId, dateISO) {
+  const offSlot = state.planning.find(
+    p => p.staff_id === staffId && p.business_date === dateISO && isOffSlot(p)
+  );
+  if (!offSlot) return;
+  const label = dayMarkerLabel(offSlotInfo(offSlot).type);
+  const { error } = await sb.from('planning').delete().eq('id', offSlot.id);
+  if (error) { console.error(error); toast('Impossible', 'error'); return; }
+  toast(`${label} retiré`);
   await renderPlanning();
 }
 
