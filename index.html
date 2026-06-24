@@ -252,7 +252,7 @@
     <div class="modal-card">
       <header class="modal-head">
         <button class="modal-close" data-close="leave">✕</button>
-        <h2 class="modal-title">Congé</h2>
+        <h2 class="modal-title">Congé payé (CP)</h2>
       </header>
       <div class="modal-body">
         <div class="leave-modal-context" id="leave-context">—</div>
@@ -262,23 +262,49 @@
             <input type="date" id="leave-date">
           </label>
           <label class="field-col">
-            <span class="field-label">Type</span>
-            <div class="leave-type-picker" id="leave-type" data-type="CP">
-              <button type="button" class="leave-type-opt active" data-type="CP">CP · payé</button>
-              <button type="button" class="leave-type-opt" data-type="CM">CM · maladie</button>
-            </div>
+            <span class="field-label">Heures créditées</span>
+            <input type="number" id="leave-hours" min="0" step="0.5" value="7">
           </label>
         </div>
-        <label class="field-col">
-          <span class="field-label">Heures créditées</span>
-          <input type="number" id="leave-hours" min="0" step="0.5" value="7">
-        </label>
-        <div class="leave-modal-hint">CP compte dans les heures payées. CM est suivi à part.</div>
+        <div class="leave-modal-hint">CP compte dans les heures payées.</div>
       </div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close="leave">Annuler</button>
         <button class="btn-danger hidden" id="leave-delete">Supprimer</button>
         <button class="btn-primary" id="leave-save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="sick-modal">
+    <div class="modal-backdrop" data-close="sick"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <button class="modal-close" data-close="sick">✕</button>
+        <h2 class="modal-title">Arrêt maladie</h2>
+      </header>
+      <div class="modal-body">
+        <div class="leave-modal-context" id="sick-context">—</div>
+        <div class="field-row-2">
+          <label class="field-col">
+            <span class="field-label">Date de début</span>
+            <input type="date" id="sick-start">
+          </label>
+          <label class="field-col">
+            <span class="field-label">Date de fin</span>
+            <input type="date" id="sick-end">
+          </label>
+        </div>
+        <label class="field-col">
+          <span class="field-label">Note (optionnel)</span>
+          <textarea id="sick-note" rows="2" placeholder="ex. certificat reçu"></textarea>
+        </label>
+        <div class="leave-modal-hint">Compté en jours travaillés planifiés sur la période. Non compté dans les heures payées.</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="sick">Annuler</button>
+        <button class="btn-danger hidden" id="sick-delete">Supprimer</button>
+        <button class="btn-primary" id="sick-save">Enregistrer</button>
       </div>
     </div>
   </div>

@@ -32,9 +32,10 @@ const state = {
   hoursSort: 'az',       // 'az' | 'order' — Heures list sort
   planningWeekStart: null,
   planningPole: 'all',   // 'all' | 'cuisine' | 'salle' | 'snack' — planning row filter
-  editing: { shift: null, staffRow: null, planSlot: null },
+  editing: { shift: null, staffRow: null, planSlot: null, leave: null, sick: null },
   managerName: localStorage.getItem('ttq.managerName') || '',
   signoffs: [],
+  sickLeaves: [],   // CM (arrêt maladie) date-ranges overlapping the selected Heures period
   pendingSignoffs: [],   // all-time pending sign-offs (disputes + awaiting signature), site-scoped
   _pendingModalKind: 'demands',
 };
@@ -238,6 +239,9 @@ async function boot() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_signoffs' }, async () => {
       if (state.activeTab === 'hours') { await loadSignoffsForRange(); renderHours(); }
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sick_leaves' }, async () => {
+      if (state.activeTab === 'hours') { await loadSickLeavesForRange(); renderHours(); }
+    })
     .subscribe();
 }
 
@@ -280,6 +284,19 @@ async function loadSignoffsForRange() {
     .lte('week_end', state.range.end));
   if (error) { console.error(error); return; }
   state.signoffs = data || [];
+}
+
+// CM (arrêt maladie) ranges that OVERLAP the selected period. A range [s,e]
+// overlaps [start,end] iff s <= range.end AND e >= range.start — so a range
+// starting before the period (or ending after it) is still picked up.
+async function loadSickLeavesForRange() {
+  const { data, error } = await bySite(sb
+    .from('sick_leaves')
+    .select('*')
+    .lte('start_date', state.range.end)
+    .gte('end_date', state.range.start));
+  if (error) { console.error(error); return; }
+  state.sickLeaves = data || [];
 }
 
 // All-time pending sign-offs (independent of the period selector), site-scoped:
@@ -457,6 +474,7 @@ async function renderHours() {
   const validatedShiftIds = new Set();
   (valRes.data || []).forEach(v => (v.shift_ids || []).forEach(id => validatedShiftIds.add(id)));
   await loadSignoffsForRange();
+  await loadSickLeavesForRange();
   await loadPendingSignoffs();
   renderPendingBar();
 
@@ -487,12 +505,23 @@ async function renderHours() {
   if (state.staffFilter !== 'all') leaveList = leaveList.filter(p => p.staff_id === state.staffFilter);
   leaveList.forEach(p => ensureGroup(p.staff_id).leave.push(p));
 
-  // Per-group leave sums. CP credits paid hours; CM is tracked separately.
+  // Staff with a CM (arrêt maladie) range but no worked shifts / CP still appear.
+  state.sickLeaves.forEach(sl => {
+    if (state.staffFilter !== 'all' && sl.staff_id !== state.staffFilter) return;
+    ensureGroup(sl.staff_id);
+  });
+
+  // Per-group sums. CP credits paid hours. CM (arrêt maladie) is a separate
+  // date-range, reported as a count of scheduled working days — never paid hours.
   byStaff.forEach(g => {
     g.cpMin = g.leave.filter(p => offSlotInfo(p).type === 'CP').reduce((s, p) => s + leaveMinutes(p), 0);
-    g.cmMin = g.leave.filter(p => offSlotInfo(p).type === 'CM').reduce((s, p) => s + leaveMinutes(p), 0);
     g.paidTotal = g.totalNet + g.cpMin;
     g.leave.sort((a, b) => a.business_date.localeCompare(b.business_date));
+    g.cmRanges = state.sickLeaves
+      .filter(sl => sl.staff_id === g.staff?.id)
+      .map(sl => ({ ...sl, _days: sickLeaveWorkingDays(rangePlanning, sl.staff_id, sl.start_date, sl.end_date) }))
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+    g.cmDays = g.cmRanges.reduce((s, r) => s + r._days, 0);
   });
 
   // Pôle filter (cuisine / salle / snack) — staff with no pôle drop out of a specific filter.
@@ -545,8 +574,8 @@ async function renderHours() {
         warn = `<div class="summary-warn">${diff > 0 ? '+' : ''}${fmtDuration(diff)} vs contrat (${expectedH.toFixed(1)}h)</div>`;
       }
 
-      const leaveLine = (g.cpMin > 0 || g.cmMin > 0)
-        ? `<div class="summary-leave">travaillé ${fmtDuration(g.totalNet)}${g.cpMin > 0 ? ` · <span class="lv cp">CP ${fmtDuration(g.cpMin)}</span>` : ''}${g.cmMin > 0 ? ` · <span class="lv cm">CM ${fmtDuration(g.cmMin)}</span>` : ''}</div>`
+      const leaveLine = (g.cpMin > 0 || g.cmDays > 0)
+        ? `<div class="summary-leave">travaillé ${fmtDuration(g.totalNet)}${g.cpMin > 0 ? ` · <span class="lv cp">CP ${fmtDuration(g.cpMin)}</span>` : ''}${g.cmDays > 0 ? ` · <span class="lv cm">CM ${g.cmDays} j</span>` : ''}</div>`
         : '';
 
       const disputeN = disputeCountByStaff.get(g.staff.id) || 0;
@@ -600,7 +629,7 @@ async function renderHours() {
     }
     const shiftsWrap = wrap.querySelector('.detail-shifts');
 
-    // ── Congés (CP / CM) — add / modify / remove on specific days ──
+    // ── Congés payés (CP) — add / modify / remove on specific days ──
     const leaveSection = document.createElement('div');
     leaveSection.className = 'leave-section';
     const leaveRows = g.leave.map(p => {
@@ -615,10 +644,10 @@ async function renderHours() {
     }).join('');
     leaveSection.innerHTML = `
       <div class="leave-head">
-        <span class="leave-head-label">Congés</span>
-        <button class="leave-add" type="button">＋ CP / CM</button>
+        <span class="leave-head-label">Congés payés</span>
+        <button class="leave-add" type="button">＋ CP</button>
       </div>
-      <div class="leave-list">${leaveRows || '<span class="leave-empty">aucun congé sur la période</span>'}</div>
+      <div class="leave-list">${leaveRows || '<span class="leave-empty">aucun congé payé sur la période</span>'}</div>
     `;
     leaveSection.querySelector('.leave-add').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -630,6 +659,35 @@ async function renderHours() {
       row.querySelector('.leave-del').addEventListener('click', (e) => { e.stopPropagation(); removeLeave(slot.id); });
     });
     shiftsWrap.appendChild(leaveSection);
+
+    // ── Arrêts maladie (CM) — date ranges, counted in scheduled working days ──
+    const cmSection = document.createElement('div');
+    cmSection.className = 'leave-section';
+    const cmRows = (g.cmRanges || []).map(r => `
+      <div class="leave-entry cm" data-cm="${r.id}">
+        <span class="leave-tag">CM</span>
+        <span class="leave-date">du ${fmtDateShort(new Date(r.start_date))} au ${fmtDateShort(new Date(r.end_date))}</span>
+        <span class="leave-hours">${r._days} j</span>
+        <button class="leave-edit" type="button" title="Modifier">modifier</button>
+        <button class="leave-del" type="button" title="Supprimer">✕</button>
+      </div>`).join('');
+    cmSection.innerHTML = `
+      <div class="leave-head">
+        <span class="leave-head-label">Arrêts maladie</span>
+        <button class="cm-add" type="button">＋ Arrêt maladie</button>
+      </div>
+      <div class="leave-list">${cmRows || '<span class="leave-empty">aucun arrêt sur la période</span>'}</div>
+    `;
+    cmSection.querySelector('.cm-add').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSickModal(g.staff.id, null);
+    });
+    cmSection.querySelectorAll('.leave-entry').forEach(row => {
+      const sl = g.cmRanges.find(r => r.id === row.dataset.cm);
+      row.querySelector('.leave-edit').addEventListener('click', (e) => { e.stopPropagation(); openSickModal(g.staff.id, sl); });
+      row.querySelector('.leave-del').addEventListener('click', (e) => { e.stopPropagation(); removeSickLeave(sl.id); });
+    });
+    shiftsWrap.appendChild(cmSection);
 
     const weeks = new Map();
     const weekOrder = [];
@@ -1265,7 +1323,6 @@ async function renderPlanning() {
           <button class="plan-add" type="button">+ créneau</button>
           <button class="plan-off" type="button">Repos</button>
           <button class="plan-cp" type="button">CP</button>
-          <button class="plan-cm" type="button">CM</button>
         </div>`;
       }
       html += '</td>';
@@ -1294,7 +1351,6 @@ async function renderPlanning() {
       }
       if (e.target.closest('.plan-off')) { setDayMarker(td.dataset.staff, td.dataset.date, 'OFF'); return; }
       if (e.target.closest('.plan-cp'))  { setDayMarker(td.dataset.staff, td.dataset.date, 'CP');  return; }
-      if (e.target.closest('.plan-cm'))  { setDayMarker(td.dataset.staff, td.dataset.date, 'CM');  return; }
       if (td.querySelector('.plan-off-chip')) return;
       openPlanModal(null, td.dataset.staff, td.dataset.date);
     });
@@ -1327,11 +1383,13 @@ function dayMarkerLabel(type) {
   return type === 'CP' ? 'Congé payé' : type === 'CM' ? 'Congé maladie' : 'Repos';
 }
 
-// A "leave" slot is a CP/CM day marker. It carries its credited minutes in
-// pause_minutes (reused — a zero-duration slot has no real pause), so the
-// amount of paid hours per leave day is adjustable. Shared with the planning tab.
+// A "leave" slot is a CP day marker (congé payé). It carries its credited
+// minutes in pause_minutes (reused — a zero-duration slot has no real pause), so
+// the paid hours per leave day are adjustable. Shared with the planning tab.
+// CM (arrêt maladie) is no longer a per-day planning marker — it lives in the
+// sick_leaves table as a date-range — so it is intentionally excluded here.
 function isLeaveSlot(p) {
-  return isOffSlot(p) && ['CP', 'CM'].includes((p.role_label || '').toUpperCase());
+  return isOffSlot(p) && (p.role_label || '').toUpperCase() === 'CP';
 }
 function leaveMinutes(p) {
   return p.pause_minutes || 0;
@@ -1341,6 +1399,24 @@ function leaveMinutes(p) {
 function defaultLeaveMinutes(staffId) {
   const s = state.staff.find(x => x.id === staffId);
   return Math.round(((s?.contract_h || 35) / 5) * 60);
+}
+
+// Number of CM (arrêt maladie) days for a date-range = distinct dates on which
+// the staff had a REAL planned créneau (not a Repos/CP/OFF marker), within
+// [startISO,endISO] ∩ the selected period. `planningRows` must be the period
+// planning set (already clipped to state.range), so repos/week-ends — which have
+// no créneau — naturally count as 0. Dates are 'YYYY-MM-DD' so string compare is safe.
+function sickLeaveWorkingDays(planningRows, staffId, startISO, endISO) {
+  const lo = startISO > state.range.start ? startISO : state.range.start;
+  const hi = endISO   < state.range.end   ? endISO   : state.range.end;
+  if (lo > hi) return 0;
+  const days = new Set();
+  for (const p of planningRows) {
+    if (p.staff_id !== staffId || isOffSlot(p)) continue;
+    if (p.business_date < lo || p.business_date > hi) continue;
+    days.add(p.business_date);
+  }
+  return days.size;
 }
 
 function monthShort(d) {
@@ -1480,19 +1556,12 @@ async function clearDayMarker(staffId, dateISO) {
   await renderPlanning();
 }
 
-// ── LEAVE MODAL (CP / CM from the Heures tab) ─────────────────────────────────
-function setLeaveType(type) {
-  const picker = $('#leave-type');
-  picker.dataset.type = type;
-  picker.querySelectorAll('.leave-type-opt').forEach(b => b.classList.toggle('active', b.dataset.type === type));
-}
-
+// ── LEAVE MODAL (congé payé / CP from the Heures tab) ─────────────────────────
 function openLeaveModal(staffId, dateISO, existing) {
   const staff = state.staff.find(s => s.id === staffId);
   state.editing.leave = { staffId, planId: existing?.id || null };
   $('#leave-context').textContent = staff ? staff.name : '—';
   $('#leave-date').value = dateISO || todayISO();
-  setLeaveType(existing ? offSlotInfo(existing).type : 'CP');
   const mins = existing ? leaveMinutes(existing) : defaultLeaveMinutes(staffId);
   $('#leave-hours').value = (mins / 60).toFixed(2).replace(/\.?0+$/, '');
   $('#leave-delete').classList.toggle('hidden', !existing);
@@ -1503,7 +1572,7 @@ async function saveLeave() {
   const ed = state.editing.leave;
   if (!ed) return;
   const date = $('#leave-date').value;
-  const type = $('#leave-type').dataset.type || 'CP';
+  const type = 'CP';
   const hours = parseFloat($('#leave-hours').value);
   if (!date) { toast('Date requise', 'error'); return; }
   if (isNaN(hours) || hours < 0) { toast('Heures invalides', 'error'); return; }
@@ -1559,6 +1628,64 @@ async function removeLeave(planId) {
   const { error } = await sb.from('planning').delete().eq('id', planId);
   if (error) { console.error(error); toast('Suppression impossible', 'error'); return; }
   toast('Congé supprimé');
+  await renderHours();
+}
+
+// ── ARRÊT MALADIE MODAL (CM date-ranges, sick_leaves table) ───────────────────
+function openSickModal(staffId, existing) {
+  const staff = state.staff.find(s => s.id === staffId);
+  state.editing.sick = { staffId, id: existing?.id || null };
+  $('#sick-context').textContent = staff ? staff.name : '—';
+  $('#sick-start').value = existing?.start_date || todayISO();
+  $('#sick-end').value = existing?.end_date || todayISO();
+  $('#sick-note').value = existing?.note || '';
+  $('#sick-delete').classList.toggle('hidden', !existing);
+  $('#sick-modal').classList.remove('hidden');
+}
+
+async function saveSickLeave() {
+  const ed = state.editing.sick;
+  if (!ed) return;
+  const start = $('#sick-start').value;
+  const end = $('#sick-end').value;
+  if (!start || !end) { toast('Dates requises', 'error'); return; }
+  if (end < start) { toast('La date de fin précède le début', 'error'); return; }
+  const staff = state.staff.find(s => s.id === ed.staffId);
+  const payload = {
+    start_date: start,
+    end_date: end,
+    note: $('#sick-note').value.trim() || null,
+  };
+  let error;
+  if (ed.id) {
+    ({ error } = await sb.from('sick_leaves').update(payload).eq('id', ed.id));
+  } else {
+    ({ error } = await sb.from('sick_leaves').insert({
+      ...payload, staff_id: ed.staffId,
+      etablissement: staff?.etablissement || defaultEtab(),
+    }));
+  }
+  if (error) { console.error(error); toast('Enregistrement impossible', 'error'); return; }
+  toast('Arrêt maladie enregistré');
+  closeModal('#sick-modal');
+  await renderHours();
+}
+
+async function deleteSickLeave() {
+  const ed = state.editing.sick;
+  if (!ed?.id) { closeModal('#sick-modal'); return; }
+  const { error } = await sb.from('sick_leaves').delete().eq('id', ed.id);
+  if (error) { console.error(error); toast('Suppression impossible', 'error'); return; }
+  toast('Arrêt supprimé');
+  closeModal('#sick-modal');
+  await renderHours();
+}
+
+async function removeSickLeave(id) {
+  if (!confirm('Supprimer cet arrêt maladie ?')) return;
+  const { error } = await sb.from('sick_leaves').delete().eq('id', id);
+  if (error) { console.error(error); toast('Suppression impossible', 'error'); return; }
+  toast('Arrêt supprimé');
   await renderHours();
 }
 
@@ -1813,10 +1940,13 @@ function wire() {
   $('#pending-signature').addEventListener('click', () => openPendingModal('signature'));
   $$('.pending-tab').forEach(t => t.addEventListener('click', () => openPendingModal(t.dataset.pending)));
 
-  // Leave (CP/CM) modal
-  $$('#leave-type .leave-type-opt').forEach(b => b.addEventListener('click', () => setLeaveType(b.dataset.type)));
+  // Leave (CP) modal
   $('#leave-save').addEventListener('click', saveLeave);
   $('#leave-delete').addEventListener('click', deleteLeave);
+
+  // Arrêt maladie (CM) modal
+  $('#sick-save').addEventListener('click', saveSickLeave);
+  $('#sick-delete').addEventListener('click', deleteSickLeave);
 
   // Planning
   $('#plan-prev').addEventListener('click', () => {

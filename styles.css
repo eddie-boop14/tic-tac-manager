@@ -966,7 +966,7 @@ body {
   padding: 2px;
 }
 
-.plan-add, .plan-off, .plan-cp, .plan-cm {
+.plan-add, .plan-off, .plan-cp {
   flex: 1;
   padding: 3px 4px;
   background: transparent;
@@ -982,8 +982,7 @@ body {
 
 .planning-grid tbody td:hover .plan-add,
 .planning-grid tbody td:hover .plan-off,
-.planning-grid tbody td:hover .plan-cp,
-.planning-grid tbody td:hover .plan-cm { opacity: 1; }
+.planning-grid tbody td:hover .plan-cp { opacity: 1; }
 
 .plan-add:hover { color: var(--moss-2); border-color: var(--moss); }
 .plan-off {
@@ -992,8 +991,6 @@ body {
 .plan-off:hover { color: var(--wood-2); border-color: var(--wood); }
 .plan-cp { border-color: rgba(47, 108, 181, 0.35); }
 .plan-cp:hover { color: var(--moss-2); border-color: var(--moss); }
-.plan-cm { border-color: rgba(189, 59, 45, 0.35); }
-.plan-cm:hover { color: var(--hot); border-color: var(--hot); }
 
 .plan-off-chip {
   margin: 2px;
@@ -1777,24 +1774,17 @@ body[data-site="chez-nous"] {
   color: var(--paper);
   margin-bottom: 12px;
 }
-.leave-type-picker { display: flex; gap: 6px; }
-.leave-type-opt {
-  flex: 1;
-  padding: 9px 8px;
-  border: var(--hairline);
-  border-radius: var(--r);
+/* CM (arrêt maladie) add button — red, to distinguish from the blue CP add. */
+.cm-add {
   background: transparent;
-  color: var(--paper-3);
-  font-family: var(--mono);
+  border: 1px dashed rgba(189, 59, 45, 0.4);
+  border-radius: 999px;
+  color: #8b1a1a;
   font-size: 0.72rem;
-  font-weight: 600;
+  padding: 3px 12px;
   cursor: pointer;
 }
-.leave-type-opt.active {
-  background: var(--moss-soft);
-  color: var(--moss-2);
-  border-color: var(--moss);
-}
+.cm-add:hover { border-color: var(--hot); border-style: solid; }
 .leave-modal-hint {
   font-family: var(--serif);
   font-style: italic;
