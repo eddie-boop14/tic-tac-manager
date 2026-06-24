@@ -544,18 +544,34 @@ async function renderHours() {
     disputeCountByStaff.set(so.staff_id, (disputeCountByStaff.get(so.staff_id) || 0) + 1);
   });
 
-  // Period-wide « jours d'arrêt » total (for the payslip). Sums the CM days of the
-  // employees currently shown — respects site, period, staff and pôle filters.
+  // Period payroll summary (for the bulletin de salaire): worked + CP + paid totals,
+  // plus the « jours d'arrêt » total with a per-employee breakdown. Sums the employees
+  // currently shown — respects site, period, staff and pôle filters.
   const arretBox = $('#arret-total');
-  const concerned = groups.filter(g => g.staff && g.cmDays > 0);
-  const totalArret = concerned.reduce((s, g) => s + g.cmDays, 0);
-  if (totalArret > 0) {
-    const parts = concerned
-      .map(g => `<span class="arret-emp">${escapeHTML(g.staff.name)} <strong>${g.cmDays} j</strong></span>`)
-      .join(' · ');
+  const shown = groups.filter(g => g.staff);
+  if (shown.length > 0) {
+    const sumNet  = shown.reduce((s, g) => s + (g.totalNet || 0), 0);
+    const sumCp   = shown.reduce((s, g) => s + (g.cpMin || 0), 0);
+    const sumPaid = shown.reduce((s, g) => s + (g.paidTotal || 0), 0);
+    const concerned = shown.filter(g => g.cmDays > 0);
+    const totalArret = concerned.reduce((s, g) => s + g.cmDays, 0);
+
+    const metrics = [
+      `<span class="arret-metric">travaillé <strong>${fmtDuration(sumNet)}</strong></span>`,
+      sumCp > 0 ? `<span class="arret-metric cp">CP <strong>${fmtDuration(sumCp)}</strong></span>` : '',
+      `<span class="arret-metric">payé <strong>${fmtDuration(sumPaid)}</strong></span>`,
+      totalArret > 0 ? `<span class="arret-metric cm">${totalArret} j d'arrêt</span>` : '',
+    ].filter(Boolean).join('<span class="arret-sep">·</span>');
+
+    const breakdown = totalArret > 0
+      ? `<div class="arret-total-emps">Arrêt maladie · ${concerned
+          .map(g => `<span class="arret-emp">${escapeHTML(g.staff.name)} <strong>${g.cmDays} j</strong></span>`)
+          .join(' · ')}</div>`
+      : '';
+
     arretBox.innerHTML =
-      `<div class="arret-total-head">${totalArret} jour${totalArret > 1 ? 's' : ''} d'arrêt sur la période</div>` +
-      `<div class="arret-total-emps">${parts}</div>`;
+      `<div class="arret-total-head"><span class="arret-total-label">Total période</span>${metrics}</div>` +
+      breakdown;
     arretBox.classList.remove('hidden');
   } else {
     arretBox.innerHTML = '';

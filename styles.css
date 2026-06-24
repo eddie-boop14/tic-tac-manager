@@ -1443,7 +1443,8 @@ body {
     color: black !important;
     page-break-inside: avoid;
   }
-  .arret-total-head, .arret-total-emps { color: black !important; }
+  .arret-total-head, .arret-total-emps, .arret-total-label,
+  .arret-metric, .arret-metric strong, .arret-sep, .arret-emp { color: black !important; }
 
   /* Planning: hide the toolbar, show the legal header, print the grid clean */
   .planning-controls { display: none !important; }
@@ -1708,17 +1709,32 @@ body[data-site="chez-nous"] {
 }
 .pending-open { white-space: nowrap; flex-shrink: 0; }
 
-/* ── Total « jours d'arrêt » sur la période (bulletin de salaire) ───────────── */
+/* ── Récap période (bulletin de salaire) : travaillé / CP / payé / arrêt ────── */
 .arret-total {
   margin: 0 0 14px;
   padding: 10px 14px;
+  border: var(--moss-line);
   border-left: 3px solid var(--hot);
   border-radius: 8px;
-  background: rgba(189, 59, 45, 0.08);
+  background: var(--ink-2);
 }
 .arret-total.hidden { display: none; }
-.arret-total-head { font-weight: 700; font-size: 1.05rem; color: var(--hot); }
-.arret-total-emps { margin-top: 4px; opacity: 0.85; font-size: 0.9rem; }
+.arret-total-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 0.92rem;
+  color: var(--paper);
+}
+.arret-total-label { font-weight: 700; margin-right: 4px; }
+.arret-metric { white-space: nowrap; color: var(--paper-2); }
+.arret-metric strong { color: var(--paper); }
+.arret-metric.cp { color: var(--moss-2); }
+.arret-metric.cp strong { color: var(--moss-2); }
+.arret-metric.cm { color: var(--hot); font-weight: 700; }
+.arret-sep { color: var(--paper-4); }
+.arret-total-emps { margin-top: 5px; opacity: 0.9; font-size: 0.85rem; color: var(--paper-2); }
 .arret-emp { white-space: nowrap; }
 
 /* ── CONGÉS (CP / CM) in Heures ─────────────────────────────────────────────── */
