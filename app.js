@@ -544,6 +544,24 @@ async function renderHours() {
     disputeCountByStaff.set(so.staff_id, (disputeCountByStaff.get(so.staff_id) || 0) + 1);
   });
 
+  // Period-wide « jours d'arrêt » total (for the payslip). Sums the CM days of the
+  // employees currently shown — respects site, period, staff and pôle filters.
+  const arretBox = $('#arret-total');
+  const concerned = groups.filter(g => g.staff && g.cmDays > 0);
+  const totalArret = concerned.reduce((s, g) => s + g.cmDays, 0);
+  if (totalArret > 0) {
+    const parts = concerned
+      .map(g => `<span class="arret-emp">${escapeHTML(g.staff.name)} <strong>${g.cmDays} j</strong></span>`)
+      .join(' · ');
+    arretBox.innerHTML =
+      `<div class="arret-total-head">${totalArret} jour${totalArret > 1 ? 's' : ''} d'arrêt sur la période</div>` +
+      `<div class="arret-total-emps">${parts}</div>`;
+    arretBox.classList.remove('hidden');
+  } else {
+    arretBox.innerHTML = '';
+    arretBox.classList.add('hidden');
+  }
+
   // Summary cards
   const summary = $('#hours-summary');
   summary.innerHTML = '';

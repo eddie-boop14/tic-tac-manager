@@ -1436,6 +1436,15 @@ body {
   }
   .detail-shifts { display: block !important; }
 
+  /* Total « jours d'arrêt » on the payslip printout */
+  .arret-total {
+    background: white !important;
+    border: 1px solid #333 !important;
+    color: black !important;
+    page-break-inside: avoid;
+  }
+  .arret-total-head, .arret-total-emps { color: black !important; }
+
   /* Planning: hide the toolbar, show the legal header, print the grid clean */
   .planning-controls { display: none !important; }
   .plan-print-head {
@@ -1698,6 +1707,19 @@ body[data-site="chez-nous"] {
   margin-top: 4px;
 }
 .pending-open { white-space: nowrap; flex-shrink: 0; }
+
+/* ── Total « jours d'arrêt » sur la période (bulletin de salaire) ───────────── */
+.arret-total {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--hot);
+  border-radius: 8px;
+  background: rgba(189, 59, 45, 0.08);
+}
+.arret-total.hidden { display: none; }
+.arret-total-head { font-weight: 700; font-size: 1.05rem; color: var(--hot); }
+.arret-total-emps { margin-top: 4px; opacity: 0.85; font-size: 0.9rem; }
+.arret-emp { white-space: nowrap; }
 
 /* ── CONGÉS (CP / CM) in Heures ─────────────────────────────────────────────── */
 .summary-leave { font-size: 0.74rem; color: var(--paper-3); margin-top: 2px; }
