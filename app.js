@@ -119,6 +119,13 @@ function fmtDuration(minutes) {
   return `${sign}${h}h${String(m).padStart(2,'0')}`;
 }
 
+// "138,25" — decimal with French comma. Used for the payroll sheet (accountant format).
+function fmtNum(value, decimals = 2) {
+  if (value == null || isNaN(value)) return '';
+  return value.toFixed(decimals).replace('.', ',');
+}
+const hoursDecimal = (min) => (min || 0) / 60;   // minutes → decimal hours
+
 function fmtDecimalHours(minutes) {
   if (minutes == null || isNaN(minutes)) return '—';
   return (minutes / 60).toFixed(2).replace('.', ',') + 'h';
@@ -577,6 +584,48 @@ async function renderHours() {
     arretBox.innerHTML = '';
     arretBox.classList.add('hidden');
   }
+
+  // Feuille de paie — printable payroll sheet matching the manual spreadsheet.
+  // Reuses the final filtered/sorted `groups`; auto-fills every computable column and
+  // leaves the manual ones (contrat dates, CSSS, acompte, HS cash) as blank cells.
+  const sheetBody = $('#payroll-rows');
+  const sheetCap  = $('#payroll-caption');
+  const rowsHtml = [];
+  const tot = { eff: 0, jours: 0, repas: 0, am: 0, cp: 0, paye: 0 };
+  groups.forEach(g => {
+    if (!g.staff) return;
+    const days  = new Set(g.shifts.map(s => s.business_date)).size;
+    const repas = g.shifts.reduce((s, x) => s + (x.meals_count || 0), 0);
+    const hcont = (g.staff.contract_h || 35) * 52 / 12;
+    tot.eff += g.totalNet; tot.jours += days; tot.repas += repas;
+    tot.am += g.cmDays; tot.cp += g.cpMin; tot.paye += g.paidTotal;
+    rowsHtml.push(`<tr>
+      <td class="ps-name">${escapeHTML(g.staff.name)}</td>
+      <td>${g.staff.hourly_rate != null ? fmtNum(g.staff.hourly_rate, 2) : ''}</td>
+      <td class="ps-blank"></td><td class="ps-blank"></td>
+      <td>${fmtNum(hoursDecimal(g.totalNet))}</td>
+      <td>${fmtNum(hcont)}</td>
+      <td>${days || ''}</td>
+      <td>${repas || ''}</td>
+      <td>${g.cmDays || ''}</td>
+      <td class="ps-blank"></td>
+      <td>${g.cpMin ? fmtNum(hoursDecimal(g.cpMin)) : ''}</td>
+      <td class="ps-blank"></td>
+      <td>${fmtNum(hoursDecimal(g.paidTotal))}</td>
+      <td class="ps-blank"></td>
+    </tr>`);
+  });
+  sheetBody.innerHTML = rowsHtml.join('') + (rowsHtml.length ? `<tr class="ps-tot">
+    <td>TOTAUX</td><td></td><td></td><td></td>
+    <td>${fmtNum(hoursDecimal(tot.eff))}</td><td></td>
+    <td>${tot.jours}</td><td>${tot.repas}</td><td>${tot.am || ''}</td><td></td>
+    <td>${tot.cp ? fmtNum(hoursDecimal(tot.cp)) : ''}</td><td></td>
+    <td>${fmtNum(hoursDecimal(tot.paye))}</td><td></td></tr>` : '');
+  const siteLabel = state.site === 'all' ? 'Tous les établissements'
+    : state.site === 'chez-nous' ? 'Chez Nous à la Plage' : 'Chalet du Tornet';
+  sheetCap.textContent =
+    `Feuille de paie · ${siteLabel} · ${fmtDateShort(new Date(state.range.start))} → ${fmtDateShort(new Date(state.range.end))}`;
+  $('#payroll-sheet-wrap').classList.toggle('hidden', rowsHtml.length === 0);
 
   // Summary cards
   const summary = $('#hours-summary');
@@ -1829,6 +1878,19 @@ function printHours() {
   window.print();
 }
 
+// Dedicated payroll-sheet printout: landscape, table only (a body class drives the
+// print CSS). window.print() is synchronous, so the temp @page style is cleaned up after.
+function printPayroll() {
+  const st = document.createElement('style');
+  st.id = 'payroll-page-style';
+  st.textContent = '@page { size: A4 landscape; margin: 8mm; }';
+  document.head.appendChild(st);
+  document.body.classList.add('print-payroll');
+  window.print();
+  document.body.classList.remove('print-payroll');
+  st.remove();
+}
+
 function exportCSV() {
   computeRange(state.range.kind);
   const filtered = state.staffFilter !== 'all' ? state.shifts.filter(s => s.staff_id === state.staffFilter) : state.shifts;
@@ -1955,6 +2017,7 @@ function wire() {
   });
 
   $('#hours-print').addEventListener('click', printHours);
+  $('#payroll-print').addEventListener('click', printPayroll);
   $('#hours-csv').addEventListener('click', exportCSV);
 
   // Heures — pôle filter

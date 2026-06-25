@@ -1417,6 +1417,32 @@ body {
   .panel { padding: 14px 10px; }
 }
 
+/* ── Feuille de paie (tableau imprimable pour le bulletin de salaire) ───────── */
+.payroll-sheet-wrap { margin: 0 0 20px; }
+.payroll-sheet-wrap.hidden { display: none; }
+.payroll-sheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 8px;
+}
+.payroll-caption {
+  font-family: var(--serif); font-style: italic;
+  color: var(--paper-2); font-size: 13px;
+}
+.payroll-scroll { overflow-x: auto; border: var(--hairline); border-radius: var(--r); }
+.payroll-sheet { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 12px; }
+.payroll-sheet th {
+  background: var(--ink-3); font-family: var(--serif); font-style: italic;
+  font-weight: 500; color: var(--paper-3); font-size: 11px;
+  padding: 7px 6px; text-align: center; border: var(--hairline); white-space: nowrap;
+}
+.payroll-sheet td {
+  padding: 6px; border: var(--hairline); text-align: center;
+  font-family: var(--mono); color: var(--paper); white-space: nowrap;
+}
+.payroll-sheet td.ps-name { text-align: left; font-family: var(--sans); }
+.payroll-sheet td.ps-blank { background: rgba(0, 0, 0, 0.015); }
+.payroll-sheet tr.ps-tot td { font-weight: 700; background: var(--ink-3); }
+
 /* ── PRINT ───────────────────────────────────────────────────────────────── */
 @media print {
   body { background: white !important; color: black !important; font-size: 11pt; }
@@ -1461,6 +1487,22 @@ body {
     page-break-inside: avoid;
   }
   .plan-slot, .plan-off-chip { color: black !important; }
+
+  /* Feuille de paie — excluded from the default prints (Imprimer feuilles / Planning) */
+  .payroll-sheet-wrap { display: none !important; }
+  /* Dedicated payroll printout (printPayroll sets body.print-payroll): show ONLY the table */
+  body.print-payroll .pending-bar,
+  body.print-payroll .arret-total,
+  body.print-payroll .hours-summary,
+  body.print-payroll .hours-detail { display: none !important; }
+  body.print-payroll .payroll-sheet-wrap { display: block !important; }
+  body.print-payroll .payroll-scroll { overflow: visible !important; border: none !important; }
+  body.print-payroll .payroll-sheet { min-width: 0 !important; width: 100% !important; font-size: 8.5pt; }
+  body.print-payroll .payroll-sheet th,
+  body.print-payroll .payroll-sheet td {
+    border: 1px solid #333 !important; color: black !important; background: white !important;
+  }
+  body.print-payroll .payroll-caption { color: black !important; display: block !important; margin-bottom: 6px; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════

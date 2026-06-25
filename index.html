@@ -163,6 +163,23 @@
         <!-- Period-wide « jours d'arrêt » total injected -->
       </div>
 
+      <div class="payroll-sheet-wrap hidden" id="payroll-sheet-wrap">
+        <div class="payroll-sheet-head">
+          <span class="payroll-caption" id="payroll-caption"></span>
+          <button class="btn-mini" id="payroll-print">🖨 Feuille de paie</button>
+        </div>
+        <div class="payroll-scroll">
+          <table class="payroll-sheet">
+            <thead><tr>
+              <th>Salarié</th><th>TX HO</th><th>Déb. contrat</th><th>Fin contrat</th>
+              <th>H. effec.</th><th>H. contrat</th><th>Jours tr.</th><th>Repas</th>
+              <th>AM</th><th>CSSS</th><th>CP</th><th>Acompte</th><th>H. payées</th><th>HS cash</th>
+            </tr></thead>
+            <tbody id="payroll-rows"><!-- Payroll rows injected --></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="hours-summary" id="hours-summary">
         <!-- Per-staff totals injected -->
       </div>
