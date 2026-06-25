@@ -1936,9 +1936,10 @@ function printPayroll() {
   document.body.classList.add('print-payroll');
   $('#payroll-print-bar').classList.remove('hidden');
   window.scrollTo(0, 0);
-  // Let the isolated layout settle before opening the print dialog (desktop convenience;
-  // on mobile the user can also tap Imprimer / use the browser menu — view is already isolated).
-  setTimeout(() => window.print(), 250);
+  // Wait for the isolated layout to actually paint before opening the print dialog, so the
+  // PDF never captures the full Heures view. Double rAF = one guaranteed paint after the class.
+  // (The user can also tap Imprimer / use the browser menu — the view is already isolated.)
+  requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
 }
 
 function closePayrollPrint() {
