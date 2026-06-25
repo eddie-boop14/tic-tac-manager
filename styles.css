@@ -1429,7 +1429,7 @@ body {
   color: var(--paper-2); font-size: 13px;
 }
 .payroll-scroll { overflow-x: auto; border: var(--hairline); border-radius: var(--r); }
-.payroll-sheet { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 12px; }
+.payroll-sheet { border-collapse: collapse; width: 100%; min-width: 1180px; font-size: 12px; }
 .payroll-sheet th {
   background: var(--ink-3); font-family: var(--serif); font-style: italic;
   font-weight: 500; color: var(--paper-3); font-size: 11px;

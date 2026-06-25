@@ -602,21 +602,26 @@ async function renderHours() {
   }
 
   // Feuille de paie — printable payroll sheet matching the manual spreadsheet.
-  // Reuses the final filtered/sorted `groups`; auto-fills every computable column and
-  // leaves the manual ones (contrat dates, CSSS, acompte, HS cash) as blank cells.
+  // Reuses the final filtered/sorted `groups`; auto-fills every computable column.
+  // Editable cells: contrat dates (→ staff), AM déb/fin, CSSS, the two acomptes (→ payroll_entries).
   const sheetBody = $('#payroll-rows');
   const sheetCap  = $('#payroll-caption');
   const rowsHtml = [];
-  const tot = { eff: 0, jours: 0, repas: 0, am: 0, cp: 0, paye: 0, csss: 0, acompte: 0 };
+  const tot = { eff: 0, jours: 0, repas: 0, am: 0, cpMin: 0, cpDays: 0, csss: 0, accVir: 0, accCash: 0 };
   groups.forEach(g => {
     if (!g.staff) return;
-    const days  = new Set(g.shifts.map(s => s.business_date)).size;
-    const repas = g.shifts.reduce((s, x) => s + (x.meals_count || 0), 0);
-    const hcont = (g.staff.contract_h || 35) * 52 / 12;
-    const entry = state.payrollEntries[g.staff.id] || {};
+    const days   = new Set(g.shifts.map(s => s.business_date)).size;
+    const repas  = g.shifts.reduce((s, x) => s + (x.meals_count || 0), 0);
+    const hcont  = (g.staff.contract_h || 35) * 52 / 12;
+    const entry  = state.payrollEntries[g.staff.id] || {};
+    const cpDays = g.leave.filter(p => offSlotInfo(p).type === 'CP').length;
+    const cpCell = g.cpMin ? `${fmtNum(hoursDecimal(g.cpMin))} h · ${cpDays} j` : '';
+    // AM déb/fin: pre-filled from the recorded arrêt (cmRanges, sorted asc), but editable per period.
+    const amDeb  = entry.am_start || g.cmRanges[0]?.start_date || '';
+    const amFin  = entry.am_end   || g.cmRanges[g.cmRanges.length - 1]?.end_date || '';
     tot.eff += g.totalNet; tot.jours += days; tot.repas += repas;
-    tot.am += g.cmDays; tot.cp += g.cpMin; tot.paye += g.paidTotal;
-    tot.csss += entry.csss || 0; tot.acompte += entry.acompte || 0;
+    tot.am += g.cmDays; tot.cpMin += g.cpMin; tot.cpDays += cpDays;
+    tot.csss += entry.csss || 0; tot.accVir += entry.acompte_virement || 0; tot.accCash += entry.acompte_cash || 0;
     const sid = g.staff.id;
     rowsHtml.push(`<tr>
       <td class="ps-name">${escapeHTML(g.staff.name)}</td>
@@ -628,21 +633,24 @@ async function renderHours() {
       <td>${days || ''}</td>
       <td>${repas || ''}</td>
       <td>${g.cmDays || ''}</td>
+      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="am_start" value="${amDeb}"></td>
+      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="am_end" value="${amFin}"></td>
       <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="csss" value="${entry.csss != null ? fmtNum(entry.csss, 2) : ''}"></td>
-      <td>${g.cpMin ? fmtNum(hoursDecimal(g.cpMin)) : ''}</td>
-      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="acompte" value="${entry.acompte != null ? fmtNum(entry.acompte, 2) : ''}"></td>
-      <td>${fmtNum(hoursDecimal(g.paidTotal))}</td>
-      <td class="ps-blank"></td>
+      <td>${cpCell}</td>
+      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="acompte_virement" value="${entry.acompte_virement != null ? fmtNum(entry.acompte_virement, 2) : ''}"></td>
+      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="acompte_virement_date" value="${entry.acompte_virement_date || ''}"></td>
+      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="acompte_cash" value="${entry.acompte_cash != null ? fmtNum(entry.acompte_cash, 2) : ''}"></td>
+      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="acompte_cash_date" value="${entry.acompte_cash_date || ''}"></td>
     </tr>`);
   });
   sheetBody.innerHTML = rowsHtml.join('') + (rowsHtml.length ? `<tr class="ps-tot">
     <td>TOTAUX</td><td></td><td></td><td></td>
     <td>${fmtNum(hoursDecimal(tot.eff))}</td><td></td>
-    <td>${tot.jours}</td><td>${tot.repas}</td><td>${tot.am || ''}</td>
+    <td>${tot.jours}</td><td>${tot.repas}</td><td>${tot.am || ''}</td><td></td><td></td>
     <td>${tot.csss ? fmtNum(tot.csss, 2) : ''}</td>
-    <td>${tot.cp ? fmtNum(hoursDecimal(tot.cp)) : ''}</td>
-    <td>${tot.acompte ? fmtNum(tot.acompte, 2) : ''}</td>
-    <td>${fmtNum(hoursDecimal(tot.paye))}</td><td></td></tr>` : '');
+    <td>${tot.cpMin ? `${fmtNum(hoursDecimal(tot.cpMin))} h · ${tot.cpDays} j` : ''}</td>
+    <td>${tot.accVir ? fmtNum(tot.accVir, 2) : ''}</td><td></td>
+    <td>${tot.accCash ? fmtNum(tot.accCash, 2) : ''}</td><td></td></tr>` : '');
   const siteLabel = state.site === 'all' ? 'Tous les établissements'
     : state.site === 'chez-nous' ? 'Chez Nous à la Plage' : 'Chalet du Tornet';
   sheetCap.textContent =
@@ -1901,20 +1909,29 @@ function printHours() {
 }
 
 // Dedicated payroll-sheet printout: landscape, table only (a body class drives the
-// print CSS). window.print() is synchronous, so the temp @page style is cleaned up after.
+// print CSS). Cleanup runs on `afterprint` — on mobile window.print() is async, so removing
+// the class synchronously would strip it before the PDF renders (and print the whole view).
 function printPayroll() {
   const st = document.createElement('style');
   st.id = 'payroll-page-style';
   st.textContent = '@page { size: A4 landscape; margin: 8mm; }';
   document.head.appendChild(st);
   document.body.classList.add('print-payroll');
+  const cleanup = () => {
+    document.body.classList.remove('print-payroll');
+    document.getElementById('payroll-page-style')?.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
   window.print();
-  document.body.classList.remove('print-payroll');
-  st.remove();
 }
 
+// Payroll fields editable per period (payroll_entries): money fields (comma-tolerant) and date fields.
+const PAYROLL_NUM_FIELDS  = ['csss', 'acompte_virement', 'acompte_cash'];
+const PAYROLL_DATE_FIELDS = ['am_start', 'am_end', 'acompte_virement_date', 'acompte_cash_date'];
+
 // Inline edits on the feuille de paie. Contract dates persist on the staff record
-// (same every period); CSSS / Acompte are upserted per period into payroll_entries.
+// (same every period); the per-period fields are upserted into payroll_entries.
 async function onPayrollEdit(e) {
   const input = e.target.closest('input[data-field]');
   if (!input) return;
@@ -1930,20 +1947,34 @@ async function onPayrollEdit(e) {
     return;
   }
 
-  // CSSS / Acompte — euros, accept a French comma. Empty clears the value.
-  const raw = input.value.trim();
-  const num = raw === '' ? null : parseFloat(raw.replace(',', '.'));
-  if (raw !== '' && (isNaN(num) || num < 0)) { toast('Montant invalide', 'error'); return; }
-  const existing = state.payrollEntries[staffId] || {};
+  // Build the new field value (money: comma-tolerant, >= 0; date: ISO string or null).
+  let value;
+  if (PAYROLL_NUM_FIELDS.includes(field)) {
+    const raw = input.value.trim();
+    value = raw === '' ? null : parseFloat(raw.replace(',', '.'));
+    if (raw !== '' && (isNaN(value) || value < 0)) { toast('Montant invalide', 'error'); return; }
+  } else if (PAYROLL_DATE_FIELDS.includes(field)) {
+    value = input.value || null;
+  } else {
+    return;
+  }
+
+  // Preserve the sibling per-period fields, then upsert on the period key.
+  const e0 = state.payrollEntries[staffId] || {};
   const payload = {
     staff_id: staffId,
     period_start: state.range.start,
     period_end: state.range.end,
-    csss:    existing.csss ?? null,
-    acompte: existing.acompte ?? null,
     etablissement: staff?.etablissement || defaultEtab(),
+    csss:                  e0.csss ?? null,
+    am_start:              e0.am_start ?? null,
+    am_end:                e0.am_end ?? null,
+    acompte_virement:      e0.acompte_virement ?? null,
+    acompte_virement_date: e0.acompte_virement_date ?? null,
+    acompte_cash:          e0.acompte_cash ?? null,
+    acompte_cash_date:     e0.acompte_cash_date ?? null,
   };
-  payload[field] = num;
+  payload[field] = value;
   const { data, error } = await sb.from('payroll_entries')
     .upsert(payload, { onConflict: 'staff_id,period_start,period_end' })
     .select().single();
