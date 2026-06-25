@@ -1908,22 +1908,30 @@ function printHours() {
   window.print();
 }
 
-// Dedicated payroll-sheet printout: landscape, table only (a body class drives the
-// print CSS). Cleanup runs on `afterprint` — on mobile window.print() is async, so removing
-// the class synchronously would strip it before the PDF renders (and print the whole view).
+// Feuille de paie printout. Rather than relying on a transient body class during
+// window.print() (unreliable on mobile — the OS print/PDF step is async, and users
+// often print from the browser's own menu), we switch the SCREEN into a sheet-only
+// view with its own Imprimer / Fermer bar. Whatever triggers the print then captures
+// only the table. `print-payroll` is now a persistent on-screen class.
 function printPayroll() {
-  const st = document.createElement('style');
-  st.id = 'payroll-page-style';
-  st.textContent = '@page { size: A4 landscape; margin: 8mm; }';
-  document.head.appendChild(st);
+  if (!document.getElementById('payroll-page-style')) {
+    const st = document.createElement('style');
+    st.id = 'payroll-page-style';
+    st.textContent = '@page { size: A4 landscape; margin: 8mm; }';
+    document.head.appendChild(st);
+  }
   document.body.classList.add('print-payroll');
-  const cleanup = () => {
-    document.body.classList.remove('print-payroll');
-    document.getElementById('payroll-page-style')?.remove();
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
-  window.print();
+  $('#payroll-print-bar').classList.remove('hidden');
+  window.scrollTo(0, 0);
+  // Let the isolated layout settle before opening the print dialog (desktop convenience;
+  // on mobile the user can also tap Imprimer / use the browser menu — view is already isolated).
+  setTimeout(() => window.print(), 250);
+}
+
+function closePayrollPrint() {
+  document.body.classList.remove('print-payroll');
+  $('#payroll-print-bar').classList.add('hidden');
+  document.getElementById('payroll-page-style')?.remove();
 }
 
 // Payroll fields editable per period (payroll_entries): money fields (comma-tolerant) and date fields.
@@ -2110,6 +2118,8 @@ function wire() {
 
   $('#hours-print').addEventListener('click', printHours);
   $('#payroll-print').addEventListener('click', printPayroll);
+  $('#payroll-do-print').addEventListener('click', () => window.print());
+  $('#payroll-close-print').addEventListener('click', closePayrollPrint);
   $('#payroll-rows').addEventListener('change', onPayrollEdit);
   $('#hours-csv').addEventListener('click', exportCSV);
 

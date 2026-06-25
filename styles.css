@@ -1454,9 +1454,34 @@ body {
 .ps-input::placeholder { color: var(--paper-3); }
 .ps-date { font-size: 11px; }
 
+/* ── FEUILLE DE PAIE — sheet-only print view (on screen) ─────────────────────
+   Clicking « Feuille de paie » adds body.print-payroll, which hides everything
+   except the table + a fixed Imprimer/Fermer bar. This makes the printout reliable
+   on mobile regardless of how the print is triggered (in-app button or browser menu). */
+.payroll-print-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 300;
+  display: flex; align-items: center; gap: 10px; justify-content: flex-end;
+  padding: 8px 14px; background: var(--ink-2); border-bottom: var(--hairline);
+}
+.payroll-print-bar.hidden { display: none; }
+.payroll-print-bar-label {
+  margin-right: auto; font-family: var(--serif); font-style: italic; color: var(--paper-2);
+}
+body.print-payroll .topbar,
+body.print-payroll .hours-controls,
+body.print-payroll .pending-bar,
+body.print-payroll .arret-total,
+body.print-payroll .hours-summary,
+body.print-payroll .hours-detail { display: none !important; }
+body.print-payroll { padding-top: 50px; }
+body.print-payroll #panel-hours { padding: 0 12px; }
+body.print-payroll .payroll-sheet-head .btn-mini { display: none; }
+
 /* ── PRINT ───────────────────────────────────────────────────────────────── */
 @media print {
   body { background: white !important; color: black !important; font-size: 11pt; }
+  body.print-payroll { padding-top: 0 !important; }
+  .payroll-print-bar { display: none !important; }
   .topbar, .footer-stamp-fixed, .btn-mini, .btn-primary, .btn-ghost, .btn-danger, .toast, .modal { display: none !important; }
   .panel { padding: 0 !important; max-width: 100% !important; }
   .hours-controls { display: none !important; }

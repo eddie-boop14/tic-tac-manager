@@ -31,6 +31,13 @@
   <!-- ══ MAIN ══ -->
   <div class="app hidden" id="app">
 
+    <!-- Sheet-only print bar (shown when body.print-payroll is active) -->
+    <div class="payroll-print-bar hidden" id="payroll-print-bar">
+      <span class="payroll-print-bar-label">Feuille de paie</span>
+      <button class="btn-mini" id="payroll-do-print">🖨 Imprimer / PDF</button>
+      <button class="btn-mini" id="payroll-close-print">✕ Fermer</button>
+    </div>
+
     <!-- ── TOPBAR ── -->
     <header class="topbar">
       <div class="brand-block">
