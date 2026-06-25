@@ -1441,6 +1441,7 @@ body {
 }
 .payroll-sheet td.ps-name { text-align: left; font-family: var(--sans); }
 .payroll-sheet td.ps-blank { background: rgba(0, 0, 0, 0.015); }
+.payroll-sheet td.ps-fromcard { color: var(--paper-2); font-size: 11px; }
 .payroll-sheet tr.ps-tot td { font-weight: 700; background: var(--ink-3); }
 
 /* Editable cells (Déb./Fin contrat, CSSS, Acompte) — inputs styled to read like plain cells */

@@ -102,6 +102,13 @@ function fmtDateShort(d) {
   return `${days[dt.getDay()]} ${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`;
 }
 
+// 'YYYY-MM-DD' → 'DD/MM/YYYY' (blank if empty). Contract dates on the payroll sheet.
+function fmtDateFr(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 function fmtDateFull(d) {
   const dt = d instanceof Date ? d : new Date(d);
   const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
@@ -626,8 +633,8 @@ async function renderHours() {
     rowsHtml.push(`<tr>
       <td class="ps-name">${escapeHTML(g.staff.name)}</td>
       <td>${g.staff.hourly_rate != null ? fmtNum(g.staff.hourly_rate, 2) : ''}</td>
-      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="contract_start" value="${g.staff.contract_start || ''}"></td>
-      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="contract_end" value="${g.staff.contract_end || ''}"></td>
+      <td class="ps-fromcard">${fmtDateFr(g.staff.contract_start)}</td>
+      <td class="ps-fromcard">${fmtDateFr(g.staff.contract_end)}</td>
       <td>${fmtNum(hoursDecimal(g.totalNet))}</td>
       <td>${fmtNum(hcont)}</td>
       <td>${days || ''}</td>
@@ -1293,6 +1300,8 @@ function openStaffModal(staff) {
     $('#staff-name').value = staff.name;
     $('#staff-pin').value = staff.pin;
     $('#staff-contract').value = staff.contract_h ?? 35;
+    $('#staff-contract-start').value = staff.contract_start || '';
+    $('#staff-contract-end').value = staff.contract_end || '';
     $('#staff-color').value = staff.color || '#5a8a6b';
     $('#staff-rate').value = staff.hourly_rate ?? '';
     $('#staff-etab').value = staff.etablissement || defaultEtab();
@@ -1304,6 +1313,8 @@ function openStaffModal(staff) {
     $('#staff-name').value = '';
     $('#staff-pin').value = '';
     $('#staff-contract').value = 35;
+    $('#staff-contract-start').value = '';
+    $('#staff-contract-end').value = '';
     $('#staff-color').value = '#5a8a6b';
     $('#staff-rate').value = '';
     $('#staff-etab').value = defaultEtab();
@@ -1318,6 +1329,8 @@ async function saveStaff() {
   const name = $('#staff-name').value.trim();
   const pin = $('#staff-pin').value.trim();
   const contract = parseFloat($('#staff-contract').value) || 35;
+  const contractStart = $('#staff-contract-start').value || null;
+  const contractEnd = $('#staff-contract-end').value || null;
   const color = $('#staff-color').value;
   const rate = parseFloat($('#staff-rate').value) || null;
   const etablissement = $('#staff-etab').value;
@@ -1327,7 +1340,7 @@ async function saveStaff() {
   if (!name) { toast('Nom requis', 'error'); return; }
   if (!/^[0-9]{4}$/.test(pin)) { toast('PIN à 4 chiffres requis', 'error'); return; }
 
-  const payload = { name, pin, contract_h: contract, color, hourly_rate: rate, active, etablissement, pole };
+  const payload = { name, pin, contract_h: contract, contract_start: contractStart, contract_end: contractEnd, color, hourly_rate: rate, active, etablissement, pole };
 
   let res;
   if (state.editing.staffRow) {
@@ -1938,22 +1951,15 @@ function closePayrollPrint() {
 const PAYROLL_NUM_FIELDS  = ['csss', 'acompte_virement', 'acompte_cash'];
 const PAYROLL_DATE_FIELDS = ['am_start', 'am_end', 'acompte_virement_date', 'acompte_cash_date'];
 
-// Inline edits on the feuille de paie. Contract dates persist on the staff record
-// (same every period); the per-period fields are upserted into payroll_entries.
+// Inline edits on the feuille de paie. Per-period fields (CSSS, acomptes, AM dates)
+// are upserted into payroll_entries. Contract dates are NOT edited here — they come
+// from the employee's edit card (saveStaff) and only display on the sheet.
 async function onPayrollEdit(e) {
   const input = e.target.closest('input[data-field]');
   if (!input) return;
   const staffId = input.dataset.staffId;
   const field   = input.dataset.field;
   const staff   = state.staff.find(s => s.id === staffId);
-
-  if (field === 'contract_start' || field === 'contract_end') {
-    const val = input.value || null;   // type=date → 'YYYY-MM-DD' or ''
-    const { error } = await sb.from('staff').update({ [field]: val }).eq('id', staffId);
-    if (error) { console.error(error); toast('Erreur enregistrement', 'error'); return; }
-    if (staff) staff[field] = val;
-    return;
-  }
 
   // Build the new field value (money: comma-tolerant, >= 0; date: ISO string or null).
   let value;
