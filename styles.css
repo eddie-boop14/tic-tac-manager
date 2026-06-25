@@ -1443,6 +1443,17 @@ body {
 .payroll-sheet td.ps-blank { background: rgba(0, 0, 0, 0.015); }
 .payroll-sheet tr.ps-tot td { font-weight: 700; background: var(--ink-3); }
 
+/* Editable cells (Déb./Fin contrat, CSSS, Acompte) — inputs styled to read like plain cells */
+.payroll-sheet td.ps-edit { padding: 0; background: rgba(90, 138, 107, 0.05); }
+.ps-input {
+  width: 100%; box-sizing: border-box; border: none; outline: none; background: transparent;
+  padding: 6px 4px; text-align: center; font-family: var(--mono); font-size: 12px;
+  color: var(--paper); -webkit-appearance: none; appearance: none;
+}
+.ps-input:focus { background: rgba(90, 138, 107, 0.16); }
+.ps-input::placeholder { color: var(--paper-3); }
+.ps-date { font-size: 11px; }
+
 /* ── PRINT ───────────────────────────────────────────────────────────────── */
 @media print {
   body { background: white !important; color: black !important; font-size: 11pt; }
@@ -1501,6 +1512,10 @@ body {
   body.print-payroll .payroll-sheet th,
   body.print-payroll .payroll-sheet td {
     border: 1px solid #333 !important; color: black !important; background: white !important;
+  }
+  /* Editable cells print as plain values — no input chrome, black on white */
+  body.print-payroll .ps-input {
+    color: black !important; background: white !important; font-size: 8.5pt; padding: 2px !important;
   }
   body.print-payroll .payroll-caption { color: black !important; display: block !important; margin-bottom: 6px; }
 }

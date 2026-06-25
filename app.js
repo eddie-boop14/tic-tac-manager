@@ -36,6 +36,7 @@ const state = {
   managerName: localStorage.getItem('ttq.managerName') || '',
   signoffs: [],
   sickLeaves: [],   // CM (arrêt maladie) date-ranges overlapping the selected Heures period
+  payrollEntries: {},   // CSSS / Acompte for the current period, keyed by staff_id (feuille de paie)
   pendingSignoffs: [],   // all-time pending sign-offs (disputes + awaiting signature), site-scoped
   _pendingModalKind: 'demands',
 };
@@ -306,6 +307,20 @@ async function loadSickLeavesForRange() {
   state.sickLeaves = data || [];
 }
 
+// CSSS / Acompte entered on the feuille de paie — period-specific amounts keyed to the
+// exact displayed range (period_start/period_end). Loaded into a staff_id → row map.
+async function loadPayrollEntriesForRange() {
+  const { data, error } = await bySite(sb
+    .from('payroll_entries')
+    .select('*')
+    .eq('period_start', state.range.start)
+    .eq('period_end', state.range.end));
+  if (error) { console.error(error); state.payrollEntries = {}; return; }
+  const map = {};
+  (data || []).forEach(r => { map[r.staff_id] = r; });
+  state.payrollEntries = map;
+}
+
 // All-time pending sign-offs (independent of the period selector), site-scoped:
 // either awaiting the employee's signature, or signed with a dispute to resolve.
 async function loadPendingSignoffs() {
@@ -482,6 +497,7 @@ async function renderHours() {
   (valRes.data || []).forEach(v => (v.shift_ids || []).forEach(id => validatedShiftIds.add(id)));
   await loadSignoffsForRange();
   await loadSickLeavesForRange();
+  await loadPayrollEntriesForRange();
   await loadPendingSignoffs();
   renderPendingBar();
 
@@ -591,26 +607,30 @@ async function renderHours() {
   const sheetBody = $('#payroll-rows');
   const sheetCap  = $('#payroll-caption');
   const rowsHtml = [];
-  const tot = { eff: 0, jours: 0, repas: 0, am: 0, cp: 0, paye: 0 };
+  const tot = { eff: 0, jours: 0, repas: 0, am: 0, cp: 0, paye: 0, csss: 0, acompte: 0 };
   groups.forEach(g => {
     if (!g.staff) return;
     const days  = new Set(g.shifts.map(s => s.business_date)).size;
     const repas = g.shifts.reduce((s, x) => s + (x.meals_count || 0), 0);
     const hcont = (g.staff.contract_h || 35) * 52 / 12;
+    const entry = state.payrollEntries[g.staff.id] || {};
     tot.eff += g.totalNet; tot.jours += days; tot.repas += repas;
     tot.am += g.cmDays; tot.cp += g.cpMin; tot.paye += g.paidTotal;
+    tot.csss += entry.csss || 0; tot.acompte += entry.acompte || 0;
+    const sid = g.staff.id;
     rowsHtml.push(`<tr>
       <td class="ps-name">${escapeHTML(g.staff.name)}</td>
       <td>${g.staff.hourly_rate != null ? fmtNum(g.staff.hourly_rate, 2) : ''}</td>
-      <td class="ps-blank"></td><td class="ps-blank"></td>
+      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="contract_start" value="${g.staff.contract_start || ''}"></td>
+      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="contract_end" value="${g.staff.contract_end || ''}"></td>
       <td>${fmtNum(hoursDecimal(g.totalNet))}</td>
       <td>${fmtNum(hcont)}</td>
       <td>${days || ''}</td>
       <td>${repas || ''}</td>
       <td>${g.cmDays || ''}</td>
-      <td class="ps-blank"></td>
+      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="csss" value="${entry.csss != null ? fmtNum(entry.csss, 2) : ''}"></td>
       <td>${g.cpMin ? fmtNum(hoursDecimal(g.cpMin)) : ''}</td>
-      <td class="ps-blank"></td>
+      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="acompte" value="${entry.acompte != null ? fmtNum(entry.acompte, 2) : ''}"></td>
       <td>${fmtNum(hoursDecimal(g.paidTotal))}</td>
       <td class="ps-blank"></td>
     </tr>`);
@@ -618,8 +638,10 @@ async function renderHours() {
   sheetBody.innerHTML = rowsHtml.join('') + (rowsHtml.length ? `<tr class="ps-tot">
     <td>TOTAUX</td><td></td><td></td><td></td>
     <td>${fmtNum(hoursDecimal(tot.eff))}</td><td></td>
-    <td>${tot.jours}</td><td>${tot.repas}</td><td>${tot.am || ''}</td><td></td>
-    <td>${tot.cp ? fmtNum(hoursDecimal(tot.cp)) : ''}</td><td></td>
+    <td>${tot.jours}</td><td>${tot.repas}</td><td>${tot.am || ''}</td>
+    <td>${tot.csss ? fmtNum(tot.csss, 2) : ''}</td>
+    <td>${tot.cp ? fmtNum(hoursDecimal(tot.cp)) : ''}</td>
+    <td>${tot.acompte ? fmtNum(tot.acompte, 2) : ''}</td>
     <td>${fmtNum(hoursDecimal(tot.paye))}</td><td></td></tr>` : '');
   const siteLabel = state.site === 'all' ? 'Tous les établissements'
     : state.site === 'chez-nous' ? 'Chez Nous à la Plage' : 'Chalet du Tornet';
@@ -1891,6 +1913,45 @@ function printPayroll() {
   st.remove();
 }
 
+// Inline edits on the feuille de paie. Contract dates persist on the staff record
+// (same every period); CSSS / Acompte are upserted per period into payroll_entries.
+async function onPayrollEdit(e) {
+  const input = e.target.closest('input[data-field]');
+  if (!input) return;
+  const staffId = input.dataset.staffId;
+  const field   = input.dataset.field;
+  const staff   = state.staff.find(s => s.id === staffId);
+
+  if (field === 'contract_start' || field === 'contract_end') {
+    const val = input.value || null;   // type=date → 'YYYY-MM-DD' or ''
+    const { error } = await sb.from('staff').update({ [field]: val }).eq('id', staffId);
+    if (error) { console.error(error); toast('Erreur enregistrement', 'error'); return; }
+    if (staff) staff[field] = val;
+    return;
+  }
+
+  // CSSS / Acompte — euros, accept a French comma. Empty clears the value.
+  const raw = input.value.trim();
+  const num = raw === '' ? null : parseFloat(raw.replace(',', '.'));
+  if (raw !== '' && (isNaN(num) || num < 0)) { toast('Montant invalide', 'error'); return; }
+  const existing = state.payrollEntries[staffId] || {};
+  const payload = {
+    staff_id: staffId,
+    period_start: state.range.start,
+    period_end: state.range.end,
+    csss:    existing.csss ?? null,
+    acompte: existing.acompte ?? null,
+    etablissement: staff?.etablissement || defaultEtab(),
+  };
+  payload[field] = num;
+  const { data, error } = await sb.from('payroll_entries')
+    .upsert(payload, { onConflict: 'staff_id,period_start,period_end' })
+    .select().single();
+  if (error) { console.error(error); toast('Erreur enregistrement', 'error'); return; }
+  state.payrollEntries[staffId] = data;
+  renderHours();   // refresh the formatted value + TOTAUX row
+}
+
 function exportCSV() {
   computeRange(state.range.kind);
   const filtered = state.staffFilter !== 'all' ? state.shifts.filter(s => s.staff_id === state.staffFilter) : state.shifts;
@@ -2018,6 +2079,7 @@ function wire() {
 
   $('#hours-print').addEventListener('click', printHours);
   $('#payroll-print').addEventListener('click', printPayroll);
+  $('#payroll-rows').addEventListener('change', onPayrollEdit);
   $('#hours-csv').addEventListener('click', exportCSV);
 
   // Heures — pôle filter
