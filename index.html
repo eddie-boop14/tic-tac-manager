@@ -180,8 +180,8 @@
             <thead><tr>
               <th>Salarié</th><th>TX HO</th><th>Déb. contrat</th><th>Fin contrat</th>
               <th>H. effec.</th><th>H. contrat</th><th>Jours tr.</th><th>Repas</th>
-              <th>AM j</th><th>AM déb</th><th>AM fin</th><th>CSSS</th><th>CP</th>
-              <th>Acompte vir.</th><th>Date vir.</th><th>Acompte cash</th><th>Date cash</th>
+              <th>AM j</th><th>AM déb</th><th>AM fin</th><th>CSSS</th>
+              <th>CP h</th><th>CP j</th><th>H. totale</th><th>Acomptes</th>
             </tr></thead>
             <tbody id="payroll-rows"><!-- Payroll rows injected --></tbody>
           </table>
@@ -334,6 +334,47 @@
         <button class="btn-ghost" data-close="sick">Annuler</button>
         <button class="btn-danger hidden" id="sick-delete">Supprimer</button>
         <button class="btn-primary" id="sick-save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="acompte-modal">
+    <div class="modal-backdrop" data-close="acompte"></div>
+    <div class="modal-card">
+      <header class="modal-head">
+        <button class="modal-close" data-close="acompte">✕</button>
+        <h2 class="modal-title">Acomptes</h2>
+      </header>
+      <div class="modal-body">
+        <div class="leave-modal-context" id="acompte-context">—</div>
+        <div class="acompte-list" id="acompte-list"></div>
+        <div class="acompte-total" id="acompte-total">Total : 0,00 €</div>
+        <div class="acompte-add">
+          <div class="field-row-3">
+            <label class="field-col">
+              <span class="field-label">Date</span>
+              <input type="date" id="acompte-date">
+            </label>
+            <label class="field-col">
+              <span class="field-label">Mode</span>
+              <select id="acompte-method">
+                <option value="virement">Virement</option>
+                <option value="especes">Espèces</option>
+                <option value="cheque">Chèque</option>
+                <option value="autre">Autre</option>
+              </select>
+            </label>
+            <label class="field-col">
+              <span class="field-label">Montant (€)</span>
+              <input type="text" id="acompte-amount" inputmode="decimal" placeholder="ex. 150">
+            </label>
+          </div>
+          <button class="btn-primary" id="acompte-add">+ Ajouter l'acompte</button>
+        </div>
+        <div class="leave-modal-hint">Tous les acomptes de la période sont additionnés sur la feuille de paie.</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="acompte">Fermer</button>
       </div>
     </div>
   </div>

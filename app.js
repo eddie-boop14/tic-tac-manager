@@ -32,11 +32,12 @@ const state = {
   hoursSort: 'az',       // 'az' | 'order' — Heures list sort
   planningWeekStart: null,
   planningPole: 'all',   // 'all' | 'cuisine' | 'salle' | 'snack' — planning row filter
-  editing: { shift: null, staffRow: null, planSlot: null, leave: null, sick: null },
+  editing: { shift: null, staffRow: null, planSlot: null, leave: null, sick: null, acompte: null },
   managerName: localStorage.getItem('ttq.managerName') || '',
   signoffs: [],
   sickLeaves: [],   // CM (arrêt maladie) date-ranges overlapping the selected Heures period
-  payrollEntries: {},   // CSSS / Acompte for the current period, keyed by staff_id (feuille de paie)
+  payrollEntries: {},   // CSSS / overrides for the current period, keyed by staff_id (feuille de paie)
+  acomptes: {},         // acomptes given in the period, keyed by staff_id → array of rows
   pendingSignoffs: [],   // all-time pending sign-offs (disputes + awaiting signature), site-scoped
   _pendingModalKind: 'demands',
 };
@@ -257,6 +258,9 @@ async function boot() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sick_leaves' }, async () => {
       if (state.activeTab === 'hours') { await loadSickLeavesForRange(); renderHours(); }
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'acomptes' }, async () => {
+      if (state.activeTab === 'hours') { await loadAcomptesForRange(); renderHours(); }
+    })
     .subscribe();
 }
 
@@ -326,6 +330,21 @@ async function loadPayrollEntriesForRange() {
   const map = {};
   (data || []).forEach(r => { map[r.staff_id] = r; });
   state.payrollEntries = map;
+}
+
+// Acomptes delivered within the selected period (by date_given), site-scoped.
+// Grouped per staff_id and totalled on the feuille de paie.
+async function loadAcomptesForRange() {
+  const { data, error } = await bySite(sb
+    .from('acomptes')
+    .select('*')
+    .gte('date_given', state.range.start)
+    .lte('date_given', state.range.end));
+  if (error) { console.error(error); state.acomptes = {}; return; }
+  const map = {};
+  (data || []).forEach(r => { (map[r.staff_id] = map[r.staff_id] || []).push(r); });
+  Object.values(map).forEach(arr => arr.sort((a, b) => a.date_given.localeCompare(b.date_given)));
+  state.acomptes = map;
 }
 
 // All-time pending sign-offs (independent of the period selector), site-scoped:
@@ -505,6 +524,7 @@ async function renderHours() {
   await loadSignoffsForRange();
   await loadSickLeavesForRange();
   await loadPayrollEntriesForRange();
+  await loadAcomptesForRange();
   await loadPendingSignoffs();
   renderPendingBar();
 
@@ -608,56 +628,65 @@ async function renderHours() {
     arretBox.classList.add('hidden');
   }
 
-  // Feuille de paie — printable payroll sheet matching the manual spreadsheet.
-  // Reuses the final filtered/sorted `groups`; auto-fills every computable column.
-  // Editable cells: contrat dates (→ staff), AM déb/fin, CSSS, the two acomptes (→ payroll_entries).
+  // Feuille de paie — printable payroll sheet. Computed values pre-fill every cell;
+  // H. effec., Jours tr., CP (h + j), CSSS, the total and AM déb/fin are all editable
+  // (overrides stored in payroll_entries, null = use computed). Acomptes open a pop-up.
   const sheetBody = $('#payroll-rows');
   const sheetCap  = $('#payroll-caption');
+  const fmtDays   = (n) => n == null || n === '' ? '' : (Number.isInteger(n) ? String(n) : fmtNum(n, 1));
   const rowsHtml = [];
-  const tot = { eff: 0, jours: 0, repas: 0, am: 0, cpMin: 0, cpDays: 0, csss: 0, accVir: 0, accCash: 0 };
+  const tot = { effH: 0, jours: 0, repas: 0, am: 0, cpH: 0, cpD: 0, csss: 0, totH: 0, acc: 0 };
   groups.forEach(g => {
     if (!g.staff) return;
-    const days   = new Set(g.shifts.map(s => s.business_date)).size;
-    const repas  = g.shifts.reduce((s, x) => s + (x.meals_count || 0), 0);
-    const hcont  = (g.staff.contract_h || 35) * 52 / 12;
-    const entry  = state.payrollEntries[g.staff.id] || {};
-    const cpDays = g.leave.filter(p => offSlotInfo(p).type === 'CP').length;
-    const cpCell = g.cpMin ? `${fmtNum(hoursDecimal(g.cpMin))} h · ${cpDays} j` : '';
-    // AM déb/fin: pre-filled from the recorded arrêt (cmRanges, sorted asc), but editable per period.
-    const amDeb  = entry.am_start || g.cmRanges[0]?.start_date || '';
-    const amFin  = entry.am_end   || g.cmRanges[g.cmRanges.length - 1]?.end_date || '';
-    tot.eff += g.totalNet; tot.jours += days; tot.repas += repas;
-    tot.am += g.cmDays; tot.cpMin += g.cpMin; tot.cpDays += cpDays;
-    tot.csss += entry.csss || 0; tot.accVir += entry.acompte_virement || 0; tot.accCash += entry.acompte_cash || 0;
-    const sid = g.staff.id;
+    const sid     = g.staff.id;
+    const entry   = state.payrollEntries[sid] || {};
+    const repas   = g.shifts.reduce((s, x) => s + (x.meals_count || 0), 0);
+    const hcont   = (g.staff.contract_h || 35) * 52 / 12;
+    const compDays   = new Set(g.shifts.map(s => s.business_date)).size;
+    const compCpDays = g.leave.filter(p => offSlotInfo(p).type === 'CP').length;
+    // Editable values: stored override (incl. 0) wins, else the computed default.
+    const effH = entry.eff_hours  ?? hoursDecimal(g.totalNet);
+    const effD = entry.eff_days   ?? compDays;
+    const cpH  = entry.cp_hours   ?? hoursDecimal(g.cpMin);
+    const cpD  = entry.cp_days    ?? compCpDays;
+    const totH = entry.total_hours ?? (effH + cpH);
+    // AM déb/fin: pre-filled from the recorded arrêt (cmRanges, sorted asc), editable per period.
+    const amDeb = entry.am_start || g.cmRanges[0]?.start_date || '';
+    const amFin = entry.am_end   || g.cmRanges[g.cmRanges.length - 1]?.end_date || '';
+    const accList  = state.acomptes[sid] || [];
+    const accTotal = accList.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+    tot.effH += effH; tot.jours += effD; tot.repas += repas; tot.am += g.cmDays;
+    tot.cpH += cpH; tot.cpD += cpD; tot.csss += entry.csss || 0; tot.totH += totH; tot.acc += accTotal;
+    const numInput = (field, val, fmt) =>
+      `<td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="${field}" value="${val ? fmt : ''}"></td>`;
     rowsHtml.push(`<tr>
       <td class="ps-name">${escapeHTML(g.staff.name)}</td>
       <td>${g.staff.hourly_rate != null ? fmtNum(g.staff.hourly_rate, 2) : ''}</td>
       <td class="ps-fromcard">${fmtDateFr(g.staff.contract_start)}</td>
       <td class="ps-fromcard">${fmtDateFr(g.staff.contract_end)}</td>
-      <td>${fmtNum(hoursDecimal(g.totalNet))}</td>
+      ${numInput('eff_hours', effH, fmtNum(effH, 2))}
       <td>${fmtNum(hcont)}</td>
-      <td>${days || ''}</td>
+      ${numInput('eff_days', effD, fmtDays(effD))}
       <td>${repas || ''}</td>
       <td>${g.cmDays || ''}</td>
       <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="am_start" value="${amDeb}"></td>
       <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="am_end" value="${amFin}"></td>
-      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="csss" value="${entry.csss != null ? fmtNum(entry.csss, 2) : ''}"></td>
-      <td>${cpCell}</td>
-      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="acompte_virement" value="${entry.acompte_virement != null ? fmtNum(entry.acompte_virement, 2) : ''}"></td>
-      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="acompte_virement_date" value="${entry.acompte_virement_date || ''}"></td>
-      <td class="ps-edit"><input class="ps-input ps-amt" inputmode="decimal" data-staff-id="${sid}" data-field="acompte_cash" value="${entry.acompte_cash != null ? fmtNum(entry.acompte_cash, 2) : ''}"></td>
-      <td class="ps-edit"><input type="date" class="ps-input ps-date" data-staff-id="${sid}" data-field="acompte_cash_date" value="${entry.acompte_cash_date || ''}"></td>
+      ${numInput('csss', entry.csss, fmtNum(entry.csss || 0, 2))}
+      ${numInput('cp_hours', cpH, fmtNum(cpH, 2))}
+      ${numInput('cp_days', cpD, fmtDays(cpD))}
+      ${numInput('total_hours', totH, fmtNum(totH, 2))}
+      <td class="ps-edit ps-acc"><button type="button" class="ps-acc-btn" data-staff-id="${sid}" data-staff-name="${escapeHTML(g.staff.name)}">${accList.length ? `${fmtNum(accTotal, 2)} € · ${accList.length}` : '+ ajouter'}</button></td>
     </tr>`);
   });
   sheetBody.innerHTML = rowsHtml.join('') + (rowsHtml.length ? `<tr class="ps-tot">
     <td>TOTAUX</td><td></td><td></td><td></td>
-    <td>${fmtNum(hoursDecimal(tot.eff))}</td><td></td>
-    <td>${tot.jours}</td><td>${tot.repas}</td><td>${tot.am || ''}</td><td></td><td></td>
+    <td>${fmtNum(tot.effH, 2)}</td><td></td>
+    <td>${fmtDays(tot.jours)}</td><td>${tot.repas}</td><td>${tot.am || ''}</td><td></td><td></td>
     <td>${tot.csss ? fmtNum(tot.csss, 2) : ''}</td>
-    <td>${tot.cpMin ? `${fmtNum(hoursDecimal(tot.cpMin))} h · ${tot.cpDays} j` : ''}</td>
-    <td>${tot.accVir ? fmtNum(tot.accVir, 2) : ''}</td><td></td>
-    <td>${tot.accCash ? fmtNum(tot.accCash, 2) : ''}</td><td></td></tr>` : '');
+    <td>${tot.cpH ? fmtNum(tot.cpH, 2) : ''}</td>
+    <td>${tot.cpD ? fmtDays(tot.cpD) : ''}</td>
+    <td>${fmtNum(tot.totH, 2)}</td>
+    <td>${tot.acc ? `${fmtNum(tot.acc, 2)} €` : ''}</td></tr>` : '');
   const siteLabel = state.site === 'all' ? 'Tous les établissements'
     : state.site === 'chez-nous' ? 'Chez Nous à la Plage' : 'Chalet du Tornet';
   sheetCap.textContent =
@@ -1948,13 +1977,13 @@ function closePayrollPrint() {
   document.getElementById('payroll-page-style')?.remove();
 }
 
-// Payroll fields editable per period (payroll_entries): money fields (comma-tolerant) and date fields.
-const PAYROLL_NUM_FIELDS  = ['csss', 'acompte_virement', 'acompte_cash'];
-const PAYROLL_DATE_FIELDS = ['am_start', 'am_end', 'acompte_virement_date', 'acompte_cash_date'];
+// Payroll fields editable per period (payroll_entries): numeric overrides (comma-tolerant,
+// empty → null → revert to the computed value) and AM date fields.
+const PAYROLL_NUM_FIELDS  = ['csss', 'eff_hours', 'eff_days', 'cp_hours', 'cp_days', 'total_hours'];
+const PAYROLL_DATE_FIELDS = ['am_start', 'am_end'];
 
-// Inline edits on the feuille de paie. Per-period fields (CSSS, acomptes, AM dates)
-// are upserted into payroll_entries. Contract dates are NOT edited here — they come
-// from the employee's edit card (saveStaff) and only display on the sheet.
+// Inline edits on the feuille de paie, upserted into payroll_entries. Contract dates and
+// TX HO come from the employee card; acomptes live in their own table (pop-up).
 async function onPayrollEdit(e) {
   const input = e.target.closest('input[data-field]');
   if (!input) return;
@@ -1962,12 +1991,12 @@ async function onPayrollEdit(e) {
   const field   = input.dataset.field;
   const staff   = state.staff.find(s => s.id === staffId);
 
-  // Build the new field value (money: comma-tolerant, >= 0; date: ISO string or null).
+  // Build the new field value (number: comma-tolerant, >= 0; date: ISO string or null).
   let value;
   if (PAYROLL_NUM_FIELDS.includes(field)) {
     const raw = input.value.trim();
     value = raw === '' ? null : parseFloat(raw.replace(',', '.'));
-    if (raw !== '' && (isNaN(value) || value < 0)) { toast('Montant invalide', 'error'); return; }
+    if (raw !== '' && (isNaN(value) || value < 0)) { toast('Valeur invalide', 'error'); return; }
   } else if (PAYROLL_DATE_FIELDS.includes(field)) {
     value = input.value || null;
   } else {
@@ -1981,13 +2010,14 @@ async function onPayrollEdit(e) {
     period_start: state.range.start,
     period_end: state.range.end,
     etablissement: staff?.etablissement || defaultEtab(),
-    csss:                  e0.csss ?? null,
-    am_start:              e0.am_start ?? null,
-    am_end:                e0.am_end ?? null,
-    acompte_virement:      e0.acompte_virement ?? null,
-    acompte_virement_date: e0.acompte_virement_date ?? null,
-    acompte_cash:          e0.acompte_cash ?? null,
-    acompte_cash_date:     e0.acompte_cash_date ?? null,
+    csss:        e0.csss ?? null,
+    am_start:    e0.am_start ?? null,
+    am_end:      e0.am_end ?? null,
+    eff_hours:   e0.eff_hours ?? null,
+    eff_days:    e0.eff_days ?? null,
+    cp_hours:    e0.cp_hours ?? null,
+    cp_days:     e0.cp_days ?? null,
+    total_hours: e0.total_hours ?? null,
   };
   payload[field] = value;
   const { data, error } = await sb.from('payroll_entries')
@@ -1996,6 +2026,69 @@ async function onPayrollEdit(e) {
   if (error) { console.error(error); toast('Erreur enregistrement', 'error'); return; }
   state.payrollEntries[staffId] = data;
   renderHours();   // refresh the formatted value + TOTAUX row
+}
+
+// ── ACOMPTES POP-UP (multiple per employee/period, each with a method + date) ──────
+const ACOMPTE_METHODS = [
+  ['virement', 'Virement'], ['especes', 'Espèces'], ['cheque', 'Chèque'], ['autre', 'Autre'],
+];
+const acompteMethodLabel = (m) => (ACOMPTE_METHODS.find(x => x[0] === m) || [, m])[1];
+
+function openAcompteModal(staffId, staffName) {
+  state.editing.acompte = { staffId, staffName };
+  $('#acompte-context').textContent =
+    `${staffName} · ${fmtDateShort(new Date(state.range.start))} → ${fmtDateShort(new Date(state.range.end))}`;
+  $('#acompte-date').value = todayISO();
+  $('#acompte-method').value = 'virement';
+  $('#acompte-amount').value = '';
+  renderAcompteList();
+  $('#acompte-modal').classList.remove('hidden');
+}
+
+function renderAcompteList() {
+  const ed = state.editing.acompte;
+  if (!ed) return;
+  const list = state.acomptes[ed.staffId] || [];
+  const total = list.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+  $('#acompte-list').innerHTML = list.length
+    ? list.map(a => `<div class="acompte-row">
+        <span class="acompte-row-date">${fmtDateFr(a.date_given)}</span>
+        <span class="acompte-row-method">${acompteMethodLabel(a.method)}</span>
+        <span class="acompte-row-amount">${fmtNum(Number(a.amount) || 0, 2)} €</span>
+        <button class="acompte-row-del" data-id="${a.id}" title="Supprimer">🗑</button>
+      </div>`).join('')
+    : '<div class="acompte-empty">Aucun acompte sur la période.</div>';
+  $('#acompte-total').textContent = `Total : ${fmtNum(total, 2)} €`;
+}
+
+async function addAcompte() {
+  const ed = state.editing.acompte;
+  if (!ed) return;
+  const date = $('#acompte-date').value;
+  const method = $('#acompte-method').value;
+  const raw = $('#acompte-amount').value.trim();
+  const amount = parseFloat(raw.replace(',', '.'));
+  if (!date) { toast('Date requise', 'error'); return; }
+  if (raw === '' || isNaN(amount) || amount < 0) { toast('Montant invalide', 'error'); return; }
+  const staff = state.staff.find(s => s.id === ed.staffId);
+  const { error } = await sb.from('acomptes').insert({
+    staff_id: ed.staffId, date_given: date, method, amount,
+    etablissement: staff?.etablissement || defaultEtab(),
+  });
+  if (error) { console.error(error); toast('Enregistrement impossible', 'error'); return; }
+  $('#acompte-amount').value = '';
+  await loadAcomptesForRange();
+  renderAcompteList();
+  renderHours();
+  toast('Acompte ajouté');
+}
+
+async function deleteAcompte(id) {
+  const { error } = await sb.from('acomptes').delete().eq('id', id);
+  if (error) { console.error(error); toast('Suppression impossible', 'error'); return; }
+  await loadAcomptesForRange();
+  renderAcompteList();
+  renderHours();
 }
 
 function exportCSV() {
@@ -2128,6 +2221,15 @@ function wire() {
   $('#payroll-do-print').addEventListener('click', () => window.print());
   $('#payroll-close-print').addEventListener('click', closePayrollPrint);
   $('#payroll-rows').addEventListener('change', onPayrollEdit);
+  $('#payroll-rows').addEventListener('click', (e) => {
+    const btn = e.target.closest('.ps-acc-btn');
+    if (btn) openAcompteModal(btn.dataset.staffId, btn.dataset.staffName);
+  });
+  $('#acompte-add').addEventListener('click', addAcompte);
+  $('#acompte-list').addEventListener('click', (e) => {
+    const del = e.target.closest('.acompte-row-del');
+    if (del) deleteAcompte(del.dataset.id);
+  });
   $('#hours-csv').addEventListener('click', exportCSV);
 
   // Heures — pôle filter

@@ -1201,6 +1201,11 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+.field-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
 
 .field-label {
   font-family: var(--serif);
@@ -1455,6 +1460,29 @@ body {
 .ps-input::placeholder { color: var(--paper-3); }
 .ps-date { font-size: 11px; }
 
+/* Acomptes cell button + pop-up */
+.payroll-sheet td.ps-acc { padding: 2px; }
+.ps-acc-btn {
+  width: 100%; padding: 5px 6px; border: 1px dashed rgba(0,0,0,0.2);
+  border-radius: 6px; background: rgba(90, 138, 107, 0.08); color: var(--paper);
+  font-family: var(--mono); font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.ps-acc-btn:hover { background: rgba(90, 138, 107, 0.18); }
+.acompte-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.acompte-empty { color: var(--paper-3); font-style: italic; font-size: 13px; padding: 6px 0; }
+.acompte-row {
+  display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px;
+  padding: 7px 10px; border: var(--hairline); border-radius: 8px; background: var(--ink-3);
+}
+.acompte-row-date { font-family: var(--mono); font-size: 12px; color: var(--paper-2); }
+.acompte-row-method { font-size: 12px; color: var(--paper-2); }
+.acompte-row-amount { font-family: var(--mono); font-weight: 700; color: var(--paper); }
+.acompte-row-del { background: none; border: none; cursor: pointer; font-size: 14px; opacity: 0.6; }
+.acompte-row-del:hover { opacity: 1; }
+.acompte-total { text-align: right; font-family: var(--mono); font-weight: 700; margin-bottom: 12px; }
+.acompte-add { border-top: var(--hairline); padding-top: 12px; }
+.acompte-add .btn-primary { width: 100%; margin-top: 10px; }
+
 /* ── FEUILLE DE PAIE — sheet-only print view (on screen) ─────────────────────
    Clicking « Feuille de paie » adds body.print-payroll, which hides everything
    except the table + a fixed Imprimer/Fermer bar. This makes the printout reliable
@@ -1542,6 +1570,9 @@ body.print-payroll .payroll-sheet-head .btn-mini { display: none; }
   /* Editable cells print as plain values — no input chrome, black on white */
   body.print-payroll .ps-input {
     color: black !important; background: white !important; font-size: 8.5pt; padding: 2px !important;
+  }
+  body.print-payroll .ps-acc-btn {
+    border: none !important; background: white !important; color: black !important; font-size: 8.5pt;
   }
   body.print-payroll .payroll-caption { color: black !important; display: block !important; margin-bottom: 6px; }
 }
